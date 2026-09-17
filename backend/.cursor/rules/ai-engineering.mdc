@@ -1,0 +1,25 @@
+---
+description: RAG and MCP guidance
+alwaysApply: false
+---
+
+# AI
+
+Focus on learning RAG and MCP.
+
+## RAG
+Document → Chunk → Embed → Store → Retrieve → LLM
+
+Support both:
+- document-based Q&A
+- normal LLM Q&A when no document exists
+
+Keep RAG components simple and independently testable.
+
+
+## MCP
+LLM → MCP Client → MCP Server → Tool → Google API
+
+Use explicit tool schemas and validation.
+
+Do not introduce AI agents or unnecessary AI architecture.

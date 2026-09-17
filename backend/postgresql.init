@@ -1,0 +1,6 @@
+CREATE USER smartclass WITH PASSWORD 'smartclass';
+CREATE DATABASE smartclass OWNER smartclass;
+GRANT ALL PRIVILEGES ON DATABASE smartclass TO smartclass;
+\c smartclass
+GRANT ALL ON SCHEMA public TO smartclass;
+ALTER SCHEMA public OWNER TO smartclass;
