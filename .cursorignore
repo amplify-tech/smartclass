@@ -39,3 +39,4 @@ frontend/build/
 # Generated files
 media/
 staticfiles/
+node_modules/
