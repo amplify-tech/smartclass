@@ -1,6 +1,13 @@
 from rest_framework import serializers
 
-from exam.models import Exam, ExamQuestion, Option, Question, QuestionGenerationJob
+from exam.models import (
+    Exam,
+    ExamQuestion,
+    Option,
+    Question,
+    QuestionGenerationJob,
+    QuestionType,
+)
 
 
 class OptionSerializer(serializers.ModelSerializer):
@@ -51,7 +58,7 @@ class QuestionSerializer(serializers.ModelSerializer):
 
 class QuestionGenerationJobSerializer(serializers.ModelSerializer):
     document_ids = serializers.ListField(
-        child=serializers.IntegerField(),
+        child=serializers.IntegerField(min_value=1),
         write_only=True,
         required=False,
         default=list,
@@ -69,7 +76,6 @@ class QuestionGenerationJobSerializer(serializers.ModelSerializer):
             'grade',
             'subject',
             'difficulty',
-            'num_questions',
             'total_marks',
             'question_types',
             'description',
@@ -88,6 +94,30 @@ class QuestionGenerationJobSerializer(serializers.ModelSerializer):
             'created_at',
             'completed_at',
         )
+
+    def validate_question_types(self, value):
+        if not isinstance(value, dict) or not value:
+            raise serializers.ValidationError(
+                'expected object like {"mcq": 2, "short": 3}',
+            )
+
+        valid = {c.value for c in QuestionType}
+        cleaned = {}
+        for key, count in value.items():
+            q_type = str(key).lower()
+            if q_type not in valid:
+                raise serializers.ValidationError(f'invalid type: {key}')
+            try:
+                count = int(count)
+            except (TypeError, ValueError):
+                raise serializers.ValidationError(f'invalid count for {key}')
+            if count < 1:
+                raise serializers.ValidationError(f'count for {key} must be >= 1')
+            cleaned[q_type] = cleaned.get(q_type, 0) + count
+
+        if sum(cleaned.values()) > 50:
+            raise serializers.ValidationError('total questions cannot exceed 50')
+        return cleaned
 
 
 class ExamQuestionSerializer(serializers.ModelSerializer):

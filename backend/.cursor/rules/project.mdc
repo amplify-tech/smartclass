@@ -33,6 +33,8 @@ Useful patterns when they solve something:
 - Service Layer
 - Orchestrator
 
+use  LLM and RAG for exam generation
+
 ### API views
 - Prefer DRF **ViewSets** for standard CRUD.
 - Use **APIView** when the endpoint is simple/custom/nested and a ViewSet would be awkward.

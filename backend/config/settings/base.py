@@ -151,7 +151,7 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(env('JWT_ACCESS_MINUTES', '60'))),
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=int(env('JWT_ACCESS_DAYS', '7'))),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=int(env('JWT_REFRESH_DAYS', '7'))),
     'ROTATE_REFRESH_TOKENS': False,
     'UPDATE_LAST_LOGIN': True,
@@ -181,6 +181,17 @@ CELERY_TASK_TIME_LIMIT = int(env('CELERY_TASK_TIME_LIMIT', '1800'))
 CELERY_TASK_SOFT_TIME_LIMIT = int(env('CELERY_TASK_SOFT_TIME_LIMIT', '1500'))
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
 CELERY_TASK_ACKS_LATE = True
+
+# ---------------------------------------------------------------------------
+# LLM (question generation)
+# ---------------------------------------------------------------------------
+# LLM_PROVIDER: local | gemini
+LLM_PROVIDER = env('LLM_PROVIDER', 'local')
+LLM_MODEL = env('LLM_MODEL', 'qwen3:1.7b')
+# Ollama (local) — default OpenAI-compatible + native chat base
+LLM_BASE_URL = env('LLM_BASE_URL', 'http://localhost:11434')
+LLM_API_KEY = env('LLM_API_KEY', '')
+LLM_TIMEOUT = int(env('LLM_TIMEOUT', '120'))
 
 LOGGING = {
     'version': 1,

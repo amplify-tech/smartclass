@@ -29,7 +29,6 @@ class QuestionGenerationJobAdmin(admin.ModelAdmin):
         'grade',
         'subject',
         'difficulty',
-        'num_questions',
         'status',
         'created_by',
         'created_at',
