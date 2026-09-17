@@ -1,0 +1,48 @@
+---
+description: Core smartclass rules
+alwaysApply: true
+---
+
+# smartclass
+
+AI-powered teacher platform for exam and lecture ppt.
+Self-learning project for System Design and AI Engineering.
+
+## Stack
+- Django + DRF + PostgreSQL
+- Redis , celery
+- React + Vite
+- JWT
+- AI: LLM, RAG, embeddings
+
+
+## Architecture
+Django is an API-only backend.
+
+use logger but concise message only
+
+### Layers (use when useful, not by default)
+- plain CRUD → ViewSet + serializer + ORM
+- **service** → orchestration only (Celery, RAG/LLM, multi-step flows)
+- **repository** → only for non-trivial query/persistence helpers (skip for simple ORM)
+
+Useful patterns when they solve something:
+
+- Strategy + Factory (LLM providers)
+- Adapter
+- Service Layer
+- Orchestrator
+
+### API views
+- Prefer DRF **ViewSets** for standard CRUD.
+- Use **APIView** when the endpoint is simple/custom/nested and a ViewSet would be awkward.
+
+
+## Rules
+- Keep architecture simple and practical.
+- Follow SOLID where useful.
+- Avoid over-engineering.
+- Business logic in services when a service exists; otherwise serializer/ORM is fine.
+- Use patterns only when they teach/usefully solve something.
+- Never hardcode secrets.
+- Don't modify unrelated code.
