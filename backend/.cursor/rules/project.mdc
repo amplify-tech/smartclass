@@ -1,0 +1,43 @@
+---
+description: Core smartclass rules
+alwaysApply: true
+---
+
+# smartclass
+
+AI-powered teacher platform for exam and lecture ppt.
+Self-learning project for System Design and AI Engineering.
+
+## Stack
+- Django + DRF + PostgreSQL
+- React + Vite
+- JWT
+- AI: LLM, RAG, embeddings
+
+
+## Architecture
+Django is an API-only backend.
+
+use service and repository layer
+
+use logger but concise message only 
+
+Useful patterns for this project:
+
+- Strategy
+- Factory
+- Adapter
+- Service Layer
+- Orchestrator
+
+Use Strategy + Factory for interchangeable LLM providers.
+
+
+## Rules
+- Keep architecture simple and practical.
+- Follow SOLID where useful.
+- Avoid over-engineering.
+- Business logic in services, not views.
+- Use patterns only when they teach/usefully solve something.
+- Never hardcode secrets.
+- Don't modify unrelated code.
