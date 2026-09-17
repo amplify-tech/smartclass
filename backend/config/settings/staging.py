@@ -7,7 +7,7 @@ ALLOWED_HOSTS = env_list('ALLOWED_HOSTS')
 if not ALLOWED_HOSTS:
     raise ValueError('ALLOWED_HOSTS must be set for staging')
 
-DATABASES = build_databases(default_sqlite=False)
+DATABASES = build_databases()
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SESSION_COOKIE_SECURE = True

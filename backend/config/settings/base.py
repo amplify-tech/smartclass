@@ -99,32 +99,22 @@ def _database_from_url(url):
     }
 
 
-def build_databases(*, default_sqlite=False):
+def build_databases():
+    """PostgreSQL for every environment. Prefer DATABASE_URL; else DB_* vars."""
     database_url = env('DATABASE_URL')
     if database_url:
         return {'default': _database_from_url(database_url)}
 
-    if env('DB_NAME'):
-        return {
-            'default': {
-                'ENGINE': 'django.db.backends.postgresql',
-                'NAME': env('DB_NAME'),
-                'USER': env('DB_USER', ''),
-                'PASSWORD': env('DB_PASSWORD', ''),
-                'HOST': env('DB_HOST', 'localhost'),
-                'PORT': env('DB_PORT', '5432'),
-            }
+    return {
+        'default': {
+            'ENGINE': 'django.db.backends.postgresql',
+            'NAME': env('DB_NAME', 'smartclass'),
+            'USER': env('DB_USER', 'smartclass'),
+            'PASSWORD': env('DB_PASSWORD', 'smartclass'),
+            'HOST': env('DB_HOST', 'localhost'),
+            'PORT': env('DB_PORT', '5432'),
         }
-
-    if default_sqlite:
-        return {
-            'default': {
-                'ENGINE': 'django.db.backends.sqlite3',
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
-
-    raise ValueError('DATABASE_URL or DB_NAME must be set')
+    }
 
 
 AUTH_PASSWORD_VALIDATORS = [

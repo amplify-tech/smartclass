@@ -8,6 +8,6 @@ DEBUG = env_bool('DEBUG', True)
 # Django test client uses Host: testserver
 ALLOWED_HOSTS = list({*BASE_ALLOWED_HOSTS, 'testserver', 'localhost', '127.0.0.1'})
 
-DATABASES = build_databases(default_sqlite=True)
+DATABASES = build_databases()
 
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

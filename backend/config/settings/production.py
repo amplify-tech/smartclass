@@ -10,7 +10,7 @@ ALLOWED_HOSTS = env_list('ALLOWED_HOSTS')
 if not ALLOWED_HOSTS:
     raise ValueError('ALLOWED_HOSTS must be set for production')
 
-DATABASES = build_databases(default_sqlite=False)
+DATABASES = build_databases()
 
 SECURE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', True)
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
