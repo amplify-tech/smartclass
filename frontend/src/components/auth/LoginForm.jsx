@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { login as loginRequest } from '../../api/auth'
 import { applyApiErrors } from '../../utils/apiErrors'
 import { setTokens } from '../../utils/authTokens'
-import { Alert, Button, FormField, Input } from '../common_ui'
+import { Button, FormField, FormRootError, Input } from '../common_ui'
 
 const loginSchema = z.object({
   email: z.string().trim().email('Enter a valid email'),
@@ -35,18 +35,10 @@ export default function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      {errors.root && (
-        <Alert variant="danger" className="py-2">
-          {errors.root.message}
-        </Alert>
-      )}
-
       <FormField id="login-email" label="Email" error={errors.email?.message}>
         <Input
-          id="login-email"
           type="email"
           autoComplete="email"
-          invalid={Boolean(errors.email)}
           {...register('email')}
         />
       </FormField>
@@ -57,13 +49,13 @@ export default function LoginForm() {
         error={errors.password?.message}
       >
         <Input
-          id="login-password"
           type="password"
           autoComplete="current-password"
-          invalid={Boolean(errors.password)}
           {...register('password')}
         />
       </FormField>
+
+      <FormRootError message={errors.root?.message} />
 
       <Button type="submit" block disabled={isSubmitting}>
         {isSubmitting ? 'Signing in…' : 'Sign in'}

@@ -12,6 +12,10 @@ Apply these rules only when working on frontend/React code.
 * Keep components reusable, simple, and readable.
 * Keep API calls in `src/api/`; never put Axios/API logic directly in UI components.
 * Use React Hook Form + Zod for forms and client-side validation.
+* Form inputs: use `FormField` + `Input` (Bootstrap floating labels). Field errors go on `FormField` via `error={errors.field?.message}`.
+* API errors (DRF): in `catch`, call `applyApiErrors(err, setError)` from `utils/apiErrors`.
+  - `{ "error": "…" }` → form-level → render `<FormRootError message={errors.root?.message} />` directly above the submit button.
+  - `{ "errors": { "email": "…" } }` → field-level; keys must match input `register` names → shown under that input.
 * Use local state/hooks/context when needed; do not introduce Redux or other global state libraries unless explicitly requested.
 * Follow the existing project structure and conventions.
 * Prefer practical solutions over abstractions or premature optimization.

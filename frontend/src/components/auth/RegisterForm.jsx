@@ -5,7 +5,7 @@ import { z } from 'zod'
 import { login as loginRequest, register as registerRequest } from '../../api/auth'
 import { applyApiErrors } from '../../utils/apiErrors'
 import { setTokens } from '../../utils/authTokens'
-import { Alert, Box, Button, FormField, Input } from '../common_ui'
+import { Box, Button, FormField, FormRootError, Input } from '../common_ui'
 
 const registerSchema = z
   .object({
@@ -61,53 +61,33 @@ export default function RegisterForm() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      {errors.root && (
-        <Alert variant="danger" className="py-2">
-          {errors.root.message}
-        </Alert>
-      )}
-
       <FormField id="register-email" label="Email" error={errors.email?.message}>
-        <Input
-          id="register-email"
-          type="email"
-          autoComplete="email"
-          invalid={Boolean(errors.email)}
-          {...register('email')}
-        />
+        <Input type="email" autoComplete="email" {...register('email')} />
       </FormField>
 
-      <Box className="row">
+      <Box className="row g-0">
         <FormField
           id="register-first-name"
           label="First name"
           error={errors.first_name?.message}
-          className="col-md-6"
+          className="col-md-6 pe-md-2"
         >
           <Input
-            id="register-first-name"
             type="text"
             autoComplete="given-name"
-            invalid={Boolean(errors.first_name)}
             {...register('first_name')}
           />
         </FormField>
 
         <FormField
           id="register-last-name"
-          label={
-            <>
-              Last name <span className="text-muted">(optional)</span>
-            </>
-          }
+          label="Last name (optional)"
           error={errors.last_name?.message}
-          className="col-md-6"
+          className="col-md-6 ps-md-2"
         >
           <Input
-            id="register-last-name"
             type="text"
             autoComplete="family-name"
-            invalid={Boolean(errors.last_name)}
             {...register('last_name')}
           />
         </FormField>
@@ -119,10 +99,8 @@ export default function RegisterForm() {
         error={errors.password?.message}
       >
         <Input
-          id="register-password"
           type="password"
           autoComplete="new-password"
-          invalid={Boolean(errors.password)}
           {...register('password')}
         />
       </FormField>
@@ -133,13 +111,13 @@ export default function RegisterForm() {
         error={errors.password_confirm?.message}
       >
         <Input
-          id="register-password-confirm"
           type="password"
           autoComplete="new-password"
-          invalid={Boolean(errors.password_confirm)}
           {...register('password_confirm')}
         />
       </FormField>
+
+      <FormRootError message={errors.root?.message} />
 
       <Button type="submit" block disabled={isSubmitting}>
         {isSubmitting ? 'Creating account…' : 'Create account'}
