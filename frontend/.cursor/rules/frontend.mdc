@@ -8,8 +8,7 @@ alwaysApply: false
 Apply these rules only when working on frontend/React code.
 
 * Stack: React + Vite + Bootstrap + React Hook Form + Zod + Axios + React Router.
-* Use shared UI from `src/components/common_ui/` (`Box`, `Button`, `Input`, `Label`, `Alert`, `FormField`). These wrap Bootstrap so the fixed theme stays consistent — do not sprinkle raw Bootstrap classes for buttons, inputs, alerts, or simple layout boxes in new UI.
-* Prefer importing from `src/components/common_ui` (barrel) over reaching into Bootstrap class names for the same primitives.
+* Use shared UI from `src/components/common_ui/`. These wrap Bootstrap so the fixed theme stays consistent — do not sprinkle raw Bootstrap classes.
 * Keep components reusable, simple, and readable.
 * Keep API calls in `src/api/`; never put Axios/API logic directly in UI components.
 * Use React Hook Form + Zod for forms and client-side validation.

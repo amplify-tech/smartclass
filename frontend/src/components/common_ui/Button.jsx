@@ -10,11 +10,13 @@ const VARIANTS = {
 }
 
 /**
- * Bootstrap button wrapper.
+ * Bootstrap button wrapper. Pass `as` to render as another element (e.g. Link).
  * @param {'primary'|'secondary'|'outline'|'outline-secondary'|'danger'|'link'} [variant]
  * @param {'sm'|'lg'} [size]
+ * @param {React.ElementType} [as]
  */
 export default function Button({
+  as: Component = 'button',
   type = 'button',
   variant = 'primary',
   size,
@@ -24,21 +26,23 @@ export default function Button({
   children,
   ...rest
 }) {
-  return (
-    <button
-      type={type}
-      disabled={disabled}
-      className={cx(
-        'btn',
-        VARIANTS[variant] ?? VARIANTS.primary,
-        size === 'sm' && 'btn-sm',
-        size === 'lg' && 'btn-lg',
-        block && 'w-100',
-        className,
-      )}
-      {...rest}
-    >
-      {children}
-    </button>
-  )
+  const props = {
+    className: cx(
+      'btn',
+      VARIANTS[variant] ?? VARIANTS.primary,
+      size === 'sm' && 'btn-sm',
+      size === 'lg' && 'btn-lg',
+      block && 'w-100',
+      className,
+    ),
+    disabled,
+    children,
+    ...rest,
+  }
+
+  if (Component === 'button') {
+    props.type = type
+  }
+
+  return <Component {...props} />
 }

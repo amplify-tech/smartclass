@@ -1,11 +1,10 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
-import { useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
 import { login as loginRequest, register as registerRequest } from '../../api/auth'
-import { useAuth } from '../../context/AuthContext'
 import { applyApiErrors } from '../../utils/apiErrors'
+import { setTokens } from '../../utils/authTokens'
 import { Alert, Box, Button, FormField, Input } from '../common_ui'
 
 const registerSchema = z
@@ -22,9 +21,6 @@ const registerSchema = z
   })
 
 export default function RegisterForm() {
-  const navigate = useNavigate()
-  const { login } = useAuth()
-
   const {
     register,
     handleSubmit,
@@ -56,8 +52,8 @@ export default function RegisterForm() {
         email: values.email,
         password: values.password,
       })
-      login(data)
-      navigate('/', { replace: true })
+      setTokens(data)
+      window.location.assign('/')
     } catch (error) {
       applyApiErrors(error, setError)
     }
