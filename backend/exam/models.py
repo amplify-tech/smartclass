@@ -45,10 +45,9 @@ class QuestionGenerationJob(models.Model):
         related_name='generation_jobs',
     )
     difficulty = models.CharField(max_length=16, choices=Difficulty.choices)
-    num_questions = models.PositiveSmallIntegerField()
     total_marks = models.PositiveSmallIntegerField()
     question_types = models.JSONField(
-        help_text='e.g. ["mcq", "short"] or {"mcq": 5, "short": 3}',
+        help_text='Counts per type, e.g. {"mcq": 2, "short": 3}',
     )
     description = models.TextField(
         blank=True,

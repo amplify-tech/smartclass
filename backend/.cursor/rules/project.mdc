@@ -1,8 +1,6 @@
 ---
-description: Core smartclass rules
 alwaysApply: true
 ---
-
 # smartclass
 
 AI-powered teacher platform for exam and lecture ppt.
@@ -32,6 +30,8 @@ Useful patterns when they solve something:
 - Adapter
 - Service Layer
 - Orchestrator
+
+use  LLM and RAG for exam generation
 
 ### API views
 - Prefer DRF **ViewSets** for standard CRUD.
