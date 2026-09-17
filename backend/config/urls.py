@@ -13,6 +13,8 @@ api_v1_patterns = [
     path('auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('health/', HealthCheckView.as_view(), name='health'),
+    path('', include('document.urls')),
+    path('', include('exam.urls')),
 ]
 
 urlpatterns = [

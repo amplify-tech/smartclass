@@ -19,26 +19,30 @@ Self-learning project for System Design and AI Engineering.
 ## Architecture
 Django is an API-only backend.
 
-use service and repository layer
+use logger but concise message only
 
-use logger but concise message only 
+### Layers (use when useful, not by default)
+- plain CRUD → ViewSet + serializer + ORM
+- **service** → orchestration only (Celery, RAG/LLM, multi-step flows)
+- **repository** → only for non-trivial query/persistence helpers (skip for simple ORM)
 
-Useful patterns for this project:
+Useful patterns when they solve something:
 
-- Strategy
-- Factory
+- Strategy + Factory (LLM providers)
 - Adapter
 - Service Layer
 - Orchestrator
 
-Use Strategy + Factory for interchangeable LLM providers.
+### API views
+- Prefer DRF **ViewSets** for standard CRUD.
+- Use **APIView** when the endpoint is simple/custom/nested and a ViewSet would be awkward.
 
 
 ## Rules
 - Keep architecture simple and practical.
 - Follow SOLID where useful.
 - Avoid over-engineering.
-- Business logic in services, not views.
+- Business logic in services when a service exists; otherwise serializer/ORM is fine.
 - Use patterns only when they teach/usefully solve something.
 - Never hardcode secrets.
 - Don't modify unrelated code.
