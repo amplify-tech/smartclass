@@ -21,6 +21,7 @@ class LocalLLMProvider(LLMProvider):
             ],
             'stream': False,
             'format': 'json',
+            'think': False,
         }
         logger.info('local llm model=%s', settings.LLM_MODEL)
         resp = requests.post(url, json=payload, timeout=settings.LLM_TIMEOUT)

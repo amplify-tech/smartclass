@@ -1,0 +1,439 @@
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useEffect, useState } from 'react'
+import { Controller, useForm, useWatch } from 'react-hook-form'
+import { z } from 'zod'
+
+import { listDocuments } from '../../api/documents'
+import {
+  createQuestionGenerationJob,
+  getQuestionGenerationJob,
+} from '../../api/questionGeneration'
+import { useCatalog } from '../../contexts/CatalogContext'
+import { applyApiErrors } from '../../utils/apiErrors'
+import {
+  Alert,
+  Box,
+  Button,
+  FormField,
+  FormRootError,
+  IntegerInput,
+  Select,
+  Spinner,
+  Textarea,
+} from '../common_ui'
+
+const POLL_INTERVAL_MS = 2000
+
+const schema = z
+  .object({
+    grade: z.coerce.number().int().positive('Select a class'),
+    subject: z.coerce.number().int().positive('Select a subject'),
+    difficulty: z.enum(['easy', 'medium', 'hard'], {
+      message: 'Select a difficulty',
+    }),
+    total_marks: z.coerce
+      .number({ message: 'Enter total marks' })
+      .int()
+      .min(1, 'Total marks must be at least 1'),
+    mcq: z.coerce.number().int().min(0).default(0),
+    short: z.coerce.number().int().min(0).default(0),
+    long: z.coerce.number().int().min(0).default(0),
+    description: z.string().optional().or(z.literal('')),
+    document_ids: z.array(z.number().int().positive()).default([]),
+  })
+  .superRefine((data, ctx) => {
+    const total = data.mcq + data.short + data.long
+    if (total < 1) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Add at least one question (MCQ, short, or long)',
+        path: ['mcq'],
+      })
+    }
+    if (total > 50) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Total questions cannot exceed 50',
+        path: ['mcq'],
+      })
+    }
+  })
+
+function buildQuestionTypes({ mcq, short, long }) {
+  const types = {}
+  if (mcq > 0) types.mcq = mcq
+  if (short > 0) types.short = short
+  if (long > 0) types.long = long
+  return types
+}
+
+export default function QuestionGenerationForm() {
+  const { grades, subjects } = useCatalog()
+  const [documents, setDocuments] = useState([])
+  const [jobId, setJobId] = useState(null)
+  const [jobStatus, setJobStatus] = useState(null)
+  const [jobError, setJobError] = useState(null)
+  const [successInfo, setSuccessInfo] = useState(null)
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    setError,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm({
+    resolver: zodResolver(schema),
+    defaultValues: {
+      grade: '',
+      subject: '',
+      difficulty: '',
+      total_marks: 20,
+      mcq: 2,
+      short: 2,
+      long: 0,
+      description: '',
+      document_ids: [],
+    },
+  })
+
+  const selectedGrade = useWatch({ control, name: 'grade' })
+  const selectedSubject = useWatch({ control, name: 'subject' })
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadDocuments() {
+      try {
+        const { data } = await listDocuments()
+        if (!cancelled) setDocuments(Array.isArray(data) ? data : [])
+      } catch {
+        if (!cancelled) setDocuments([])
+      }
+    }
+
+    loadDocuments()
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Standard poll: while jobId is set, GET status until completed/failed.
+  useEffect(() => {
+    if (!jobId) return undefined
+
+    let cancelled = false
+    let timerId
+
+    async function poll() {
+      try {
+        const { data } = await getQuestionGenerationJob(jobId)
+        if (cancelled) return
+
+        setJobStatus(data.status)
+
+        if (data.status === 'completed') {
+          setSuccessInfo({
+            questionCount: data.question_ids?.length ?? 0,
+            jobId: data.id,
+          })
+          setJobError(null)
+          setJobId(null)
+          return
+        }
+
+        if (data.status === 'failed') {
+          setJobError(data.error_message || 'Question generation failed')
+          setSuccessInfo(null)
+          setJobId(null)
+          return
+        }
+
+        timerId = setTimeout(poll, POLL_INTERVAL_MS)
+      } catch (err) {
+        if (cancelled) return
+        setJobError(
+          err.response?.data?.detail ||
+            err.response?.data?.error ||
+            err.message ||
+            'Failed to check generation status',
+        )
+        setSuccessInfo(null)
+        setJobId(null)
+      }
+    }
+
+    poll()
+
+    return () => {
+      cancelled = true
+      clearTimeout(timerId)
+    }
+  }, [jobId])
+
+  const onSubmit = async (values) => {
+    setJobError(null)
+    setSuccessInfo(null)
+    setJobStatus('pending')
+
+    const payload = {
+      grade: values.grade,
+      subject: values.subject,
+      difficulty: values.difficulty,
+      total_marks: values.total_marks,
+      question_types: buildQuestionTypes(values),
+      description: values.description || '',
+      document_ids: values.document_ids || [],
+    }
+
+    try {
+      const { data } = await createQuestionGenerationJob(payload)
+      setJobStatus(data.status)
+      setJobId(data.id)
+    } catch (err) {
+      setJobStatus(null)
+      applyApiErrors(err, setError)
+    }
+  }
+
+  function cancelGeneration() {
+    setJobId(null)
+    setJobStatus(null)
+  }
+
+  const readyDocuments = documents.filter((doc) => {
+    if (doc.status !== 'ready') return false
+    if (selectedGrade && Number(doc.grade) !== Number(selectedGrade)) return false
+    if (selectedSubject && Number(doc.subject) !== Number(selectedSubject)) {
+      return false
+    }
+    return true
+  })
+
+  const isPolling = Boolean(jobId)
+  const isBusy = isPolling || isSubmitting
+  const statusText =
+    jobStatus === 'running'
+      ? 'Generating questions…'
+      : jobStatus === 'pending'
+        ? 'Queued…'
+        : 'Working…'
+
+  return (
+    <Box className="position-relative">
+      {isBusy && (
+        <Box
+          className="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center gap-3 bg-white bg-opacity-75 rounded"
+          style={{ zIndex: 2 }}
+          aria-live="polite"
+          aria-busy="true"
+        >
+          <Spinner label={statusText} />
+          <p className="text-muted mb-0">{statusText}</p>
+          {isPolling && (
+            <Button
+              type="button"
+              variant="outline-secondary"
+              size="sm"
+              onClick={cancelGeneration}
+            >
+              Cancel
+            </Button>
+          )}
+        </Box>
+      )}
+
+      {successInfo && (
+        <Alert variant="success" className="mb-3">
+          Generated {successInfo.questionCount} question
+          {successInfo.questionCount === 1 ? '' : 's'} successfully.
+        </Alert>
+      )}
+
+      {jobError && (
+        <Alert variant="danger" className="mb-3">
+          {jobError}
+        </Alert>
+      )}
+
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <Box className="row g-3">
+          <FormField
+            id="gen-grade"
+            label="Class"
+            error={errors.grade?.message}
+            className="col-sm-6 col-lg-3"
+          >
+            <Select disabled={isBusy} {...register('grade')}>
+              <option value=""> </option>
+              {grades.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.name}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+
+          <FormField
+            id="gen-subject"
+            label="Subject"
+            error={errors.subject?.message}
+            className="col-sm-6 col-lg-3"
+          >
+            <Select disabled={isBusy} {...register('subject')}>
+              <option value=""> </option>
+              {subjects.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+
+          <FormField
+            id="gen-difficulty"
+            label="Difficulty"
+            error={errors.difficulty?.message}
+            className="col-sm-6 col-lg-3"
+          >
+            <Select disabled={isBusy} {...register('difficulty')}>
+              <option value=""> </option>
+              <option value="easy">Easy</option>
+              <option value="medium">Medium</option>
+              <option value="hard">Hard</option>
+            </Select>
+          </FormField>
+
+          <FormField
+            id="gen-total-marks"
+            label="Total marks"
+            error={errors.total_marks?.message}
+            className="col-sm-6 col-lg-3"
+          >
+            <IntegerInput
+              min={1}
+              disabled={isBusy}
+              {...register('total_marks')}
+            />
+          </FormField>
+        </Box>
+
+        <p className="form-label mb-2">Question counts</p>
+        <Box className="row g-3">
+          <FormField
+            id="gen-mcq"
+            label="MCQ"
+            error={errors.mcq?.message}
+            className="col-sm-4"
+          >
+            <IntegerInput min={0} disabled={isBusy} {...register('mcq')} />
+          </FormField>
+          <FormField
+            id="gen-short"
+            label="Short"
+            error={errors.short?.message}
+            className="col-sm-4"
+          >
+            <IntegerInput min={0} disabled={isBusy} {...register('short')} />
+          </FormField>
+          <FormField
+            id="gen-long"
+            label="Long"
+            error={errors.long?.message}
+            className="col-sm-4"
+          >
+            <IntegerInput min={0} disabled={isBusy} {...register('long')} />
+          </FormField>
+        </Box>
+
+        <FormField
+          id="gen-description"
+          label="Description (optional)"
+          error={errors.description?.message}
+        >
+          <Textarea disabled={isBusy} {...register('description')} />
+        </FormField>
+
+        <Box className="mb-3">
+          <p className="form-label mb-2">Documents (optional)</p>
+          {errors.document_ids?.message && (
+            <div className="invalid-feedback d-block mb-2">
+              {errors.document_ids.message}
+            </div>
+          )}
+          {!selectedGrade || !selectedSubject ? (
+            <p className="text-muted small mb-0">
+              Select class and subject to see ready documents.
+            </p>
+          ) : readyDocuments.length === 0 ? (
+            <p className="text-muted small mb-0">
+              No ready documents for this class and subject.
+            </p>
+          ) : (
+            <Controller
+              name="document_ids"
+              control={control}
+              render={({ field }) => (
+                <Box className="d-flex flex-column gap-2">
+                  {readyDocuments.map((doc) => {
+                    const checked = field.value.includes(doc.id)
+                    return (
+                      <div className="form-check" key={doc.id}>
+                        <input
+                          className="form-check-input"
+                          type="checkbox"
+                          id={`doc-${doc.id}`}
+                          disabled={isBusy}
+                          checked={checked}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              field.onChange([...field.value, doc.id])
+                            } else {
+                              field.onChange(
+                                field.value.filter((id) => id !== doc.id),
+                              )
+                            }
+                          }}
+                        />
+                        <label className="form-check-label" htmlFor={`doc-${doc.id}`}>
+                          {doc.title}
+                        </label>
+                      </div>
+                    )
+                  })}
+                </Box>
+              )}
+            />
+          )}
+        </Box>
+
+        <FormRootError message={errors.root?.message} />
+
+        <Box className="d-flex gap-2">
+          <Button type="submit" disabled={isBusy}>
+            {isBusy ? 'Generating…' : 'Generate questions'}
+          </Button>
+          {jobError && (
+            <Button type="submit" variant="outline-secondary" disabled={isBusy}>
+              Retry
+            </Button>
+          )}
+          {successInfo && (
+            <Button
+              type="button"
+              variant="outline-secondary"
+              disabled={isBusy}
+              onClick={() => {
+                setSuccessInfo(null)
+                setJobError(null)
+                reset()
+              }}
+            >
+              Generate again
+            </Button>
+          )}
+        </Box>
+      </form>
+    </Box>
+  )
+}
