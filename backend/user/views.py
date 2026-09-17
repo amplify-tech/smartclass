@@ -1,3 +1,1 @@
-from django.shortcuts import render
-
-# Create your views here.
+# API views live under /api/v1/ — add user endpoints here when needed.
