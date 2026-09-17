@@ -1,23 +1,21 @@
 ---
+
 description: SmartClass frontend conventions (React + Bootstrap UI)
 globs: frontend/**/*.{js,jsx,css}
 alwaysApply: false
----
+------------------
+
 # SmartClass Frontend Rules
 
-Apply these rules only when working on frontend/React code.
-
 * Stack: React + Vite + Bootstrap + React Hook Form + Zod + Axios + React Router.
-* Use shared UI from `src/components/common_ui/`. These wrap Bootstrap so the fixed theme stays consistent — do not sprinkle raw Bootstrap classes.
+* Use shared UI from `src/components/common_ui/`; avoid raw Bootstrap classes when a common component exists.
 * Keep components reusable, simple, and readable.
-* Keep API calls in `src/api/`; never put Axios/API logic directly in UI components.
-* Use React Hook Form + Zod for forms and client-side validation.
-* Form inputs: use `FormField` + `Input` (Bootstrap floating labels). Field errors go on `FormField` via `error={errors.field?.message}`.
-* API errors (DRF): in `catch`, call `applyApiErrors(err, setError)` from `utils/apiErrors`.
-  - `{ "error": "…" }` → form-level → render `<FormRootError message={errors.root?.message} />` directly above the submit button.
-  - `{ "errors": { "email": "…" } }` → field-level; keys must match input `register` names → shown under that input.
-* Use local state/hooks/context when needed; do not introduce Redux or other global state libraries unless explicitly requested.
-* Follow the existing project structure and conventions.
-* Prefer practical solutions over abstractions or premature optimization.
-* This is a self-learning project, not enterprise-grade. Do not over-engineer, add unnecessary patterns, or build production-scale infrastructure.
-* Keep code concise and easy to understand so the architecture can be learned and reviewed.
+* Keep API calls in `src/api/`; never put API logic in UI components.
+* Use React Hook Form + Zod for forms and validation.
+* Use `FormField` + `Input`; pass field errors via `error={errors.field?.message}`.
+* Handle DRF errors with `applyApiErrors(err, setError)` from `utils/apiErrors`.
+* Use React Context + local state for small shared authenticated data; no Redux/Zustand/TanStack Query unless explicitly requested.
+* Fetch common user data (e.g. classes, subjects) once after authentication and expose it through a reusable context/hook.
+* Follow existing project structure and conventions.
+* Prefer simple, practical solutions; avoid unnecessary abstractions.
+* This is a self-learning project, not enterprise-grade. Keep code concise and easy to understand.

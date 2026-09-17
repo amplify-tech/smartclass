@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 
 import AppLayout from './components/layout/AppLayout'
+import { CatalogProvider } from './contexts/CatalogContext'
 import AuthPage from './pages/AuthPage'
 import DocumentsPage from './pages/DocumentsPage'
 import ExamsPage from './pages/ExamsPage'
@@ -12,7 +13,13 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/auth" element={<AuthPage />} />
-        <Route element={<AppLayout />}>
+        <Route
+          element={
+            <CatalogProvider>
+              <AppLayout />
+            </CatalogProvider>
+          }
+        >
           <Route path="/" element={<HomePage />} />
           <Route path="/exams" element={<ExamsPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
