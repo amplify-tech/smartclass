@@ -33,7 +33,10 @@ class QuestionGenerationJobViewSet(
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,
 ):
+    """Jobs are scoped to the authenticated owner only (list + retrieve)."""
+
     serializer_class = QuestionGenerationJobSerializer
+    permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post', 'head', 'options']
     pagination_class = None
 
@@ -110,6 +113,14 @@ class QuestionViewSet(viewsets.ModelViewSet):
         subject = params.get('subject')
         if subject is not None and subject != '':
             qs = qs.filter(subject_id=subject)
+
+        generation_job = params.get('generation_job') or params.get('job_id')
+        if generation_job is not None and generation_job != '':
+            # Only the job owner can filter questions by that job.
+            qs = qs.filter(
+                generation_job_id=generation_job,
+                generation_job__created_by=self.request.user,
+            )
 
         label_ids = params.getlist('label')
         if label_ids:

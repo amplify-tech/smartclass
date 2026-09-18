@@ -4,7 +4,7 @@ import client from './client'
  * List questions with optional filters and pagination.
  *
  * Params: page, page_size, search, grade, subject, label,
- *         question_type, difficulty
+ *         question_type, difficulty, generation_job (or job_id)
  */
 export function listQuestions(params = {}) {
   return client.get('/questions/', { params })

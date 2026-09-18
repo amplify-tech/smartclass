@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { addExamQuestions, getExam } from '../../api/exams'
 import { listLabels } from '../../api/labels'
+import { getQuestionGenerationJob } from '../../api/questionGeneration'
 import { listQuestions } from '../../api/questions'
 import { useCatalog } from '../../contexts/CatalogContext'
 import {
@@ -30,6 +31,7 @@ const TYPE_LABELS = {
 }
 
 const SEARCH_DEBOUNCE_MS = 300
+const JOB_POLL_INTERVAL_MS = 2000
 
 function truncate(text, max = 80) {
   const value = String(text || '').trim()
@@ -50,17 +52,23 @@ function createdByLabel(createdBy) {
 
 export default function QuestionBank() {
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { user, grades, subjects } = useCatalog()
 
   const isSelectMode = searchParams.get('mode') === 'select'
   const examId = searchParams.get('examId')
+  const jobId = searchParams.get('jobId')
 
   const [exam, setExam] = useState(null)
   const [examStatus, setExamStatus] = useState(
     isSelectMode ? 'loading' : 'ready',
   )
   const [examError, setExamError] = useState(null)
+
+  const [jobStatus, setJobStatus] = useState(jobId ? 'loading' : 'idle')
+  const [jobError, setJobError] = useState(null)
+  const [jobReady, setJobReady] = useState(!jobId)
+  const [generatedCount, setGeneratedCount] = useState(null)
 
   const [questions, setQuestions] = useState([])
   const [labels, setLabels] = useState([])
@@ -89,6 +97,10 @@ export default function QuestionBank() {
   const [drawerMode, setDrawerMode] = useState('create')
   const [editingQuestion, setEditingQuestion] = useState(null)
 
+  const isJobMode = Boolean(jobId)
+  const isGenerating =
+    isJobMode && (jobStatus === 'loading' || jobStatus === 'pending' || jobStatus === 'running')
+
   const gradeName = useMemo(() => {
     if (!exam) return ''
     const match = grades.find((g) => Number(g.id) === Number(exam.grade))
@@ -101,6 +113,71 @@ export default function QuestionBank() {
     return match?.name || ''
   }, [exam, subjects])
 
+  // Poll generation job when arriving with ?jobId=
+  useEffect(() => {
+    if (!jobId) {
+      setJobStatus('idle')
+      setJobError(null)
+      setJobReady(true)
+      setGeneratedCount(null)
+      return undefined
+    }
+
+    let cancelled = false
+    let timerId
+
+    setJobReady(false)
+    setJobStatus('loading')
+    setJobError(null)
+    setGeneratedCount(null)
+    setQuestions([])
+    setPage(1)
+
+    async function poll() {
+      try {
+        const { data } = await getQuestionGenerationJob(jobId)
+        if (cancelled) return
+
+        setSubjectFilter(String(data.subject ?? ''))
+        setGradeFilter(String(data.grade ?? ''))
+        setDifficultyFilter(String(data.difficulty ?? ''))
+        setJobStatus(data.status)
+
+        if (data.status === 'completed') {
+          setJobError(null)
+          setGeneratedCount(data.question_ids?.length ?? 0)
+          setJobReady(true)
+          return
+        }
+
+        if (data.status === 'failed') {
+          setJobError(data.error_message || 'Question generation failed')
+          setJobReady(false)
+          return
+        }
+
+        timerId = setTimeout(poll, JOB_POLL_INTERVAL_MS)
+      } catch (err) {
+        if (cancelled) return
+        setJobStatus('error')
+        setJobReady(false)
+        setJobError(
+          err.response?.data?.detail ||
+            err.response?.data?.error ||
+            err.message ||
+            'Failed to check generation status',
+        )
+      }
+    }
+
+    poll()
+
+    return () => {
+      cancelled = true
+      clearTimeout(timerId)
+    }
+  }, [jobId])
+
   // Load exam when entering selection mode
   useEffect(() => {
     if (!isSelectMode) {
@@ -110,8 +187,10 @@ export default function QuestionBank() {
       setSelectedMap(new Map())
       setSubmitError(null)
       setSubmitStatus('idle')
-      setSubjectFilter('')
-      setGradeFilter('')
+      if (!jobId) {
+        setSubjectFilter('')
+        setGradeFilter('')
+      }
       return undefined
     }
 
@@ -151,7 +230,7 @@ export default function QuestionBank() {
     return () => {
       cancelled = true
     }
-  }, [isSelectMode, examId])
+  }, [isSelectMode, examId, jobId])
 
   // Debounce search text before hitting the API
   useEffect(() => {
@@ -167,6 +246,7 @@ export default function QuestionBank() {
   const loadQuestions = useCallback(
     async ({ silent = false } = {}) => {
       if (isSelectMode && examStatus !== 'ready') return
+      if (isJobMode && !jobReady) return
 
       if (!silent) {
         setStatus('loading')
@@ -182,6 +262,7 @@ export default function QuestionBank() {
         label: topicFilter,
         question_type: typeFilter,
         difficulty: difficultyFilter,
+        generation_job: jobId || undefined,
       })
 
       try {
@@ -205,6 +286,9 @@ export default function QuestionBank() {
     [
       isSelectMode,
       examStatus,
+      isJobMode,
+      jobReady,
+      jobId,
       page,
       pageSize,
       search,
@@ -215,6 +299,17 @@ export default function QuestionBank() {
       difficultyFilter,
     ],
   )
+
+  function clearJobFilter() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('jobId')
+    setSearchParams(next, { replace: true })
+    setJobStatus('idle')
+    setJobError(null)
+    setJobReady(true)
+    setGeneratedCount(null)
+    setPage(1)
+  }
 
   const loadLabels = useCallback(async () => {
     try {
@@ -351,7 +446,8 @@ export default function QuestionBank() {
       (!isSelectMode && subjectFilter) ||
       topicFilter ||
       typeFilter ||
-      difficultyFilter,
+      difficultyFilter ||
+      jobId,
   )
 
   if (isSelectMode && examStatus === 'loading') {
@@ -383,6 +479,37 @@ export default function QuestionBank() {
     )
   }
 
+  if (isJobMode && (jobStatus === 'failed' || jobStatus === 'error')) {
+    return (
+      <Box>
+        <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+          <h1 className="h4 mb-0">Question Bank</h1>
+          <Button as={Link} to="/exams/generate" variant="outline-secondary">
+            + Generate Questions
+          </Button>
+        </Box>
+        <Alert variant="danger" className="mb-3">
+          {jobError || 'Question generation failed'}
+        </Alert>
+        <Box className="d-flex flex-wrap gap-2">
+          <Button as={Link} to="/exams/generate">
+            Try again
+          </Button>
+          <Button type="button" variant="outline-secondary" onClick={clearJobFilter}>
+            View all questions
+          </Button>
+        </Box>
+      </Box>
+    )
+  }
+
+  const filtersDisabled = isGenerating
+  const tableColSpan = isSelectMode ? 5 : 6
+  const showTable =
+    isGenerating ||
+    status === 'loading' ||
+    (status === 'ready' && questions.length > 0)
+
   return (
     <Box className={isSelectMode ? 'pb-5 mb-4' : undefined}>
       {isSelectMode ? (
@@ -411,10 +538,15 @@ export default function QuestionBank() {
         <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
           <h1 className="h4 mb-0">Question Bank</h1>
           <Box className="d-flex flex-wrap gap-2">
-            <Button as={Link} to="/exams/generate" variant="outline-secondary">
+            <Button
+              as={Link}
+              to="/exams/generate"
+              variant="outline-secondary"
+              disabled={isGenerating}
+            >
               + Generate Questions
             </Button>
-            <Button type="button" onClick={openCreate}>
+            <Button type="button" onClick={openCreate} disabled={isGenerating}>
               + Add Question
             </Button>
           </Box>
@@ -436,6 +568,7 @@ export default function QuestionBank() {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               aria-label="Search questions"
+              disabled={filtersDisabled}
             />
           </Box>
 
@@ -447,6 +580,7 @@ export default function QuestionBank() {
                     value={subjectFilter}
                     onChange={changeFilter(setSubjectFilter)}
                     aria-label="Filter by subject"
+                    disabled={filtersDisabled}
                   >
                     <option value="">Subject</option>
                     {subjects.map((subject) => (
@@ -461,6 +595,7 @@ export default function QuestionBank() {
                     value={gradeFilter}
                     onChange={changeFilter(setGradeFilter)}
                     aria-label="Filter by class"
+                    disabled={filtersDisabled}
                   >
                     <option value="">Class</option>
                     {grades.map((grade) => (
@@ -477,6 +612,7 @@ export default function QuestionBank() {
                 value={topicFilter}
                 onChange={changeFilter(setTopicFilter)}
                 aria-label="Filter by topic"
+                disabled={filtersDisabled}
               >
                 <option value="">Topic</option>
                 {labels.map((label) => (
@@ -491,6 +627,7 @@ export default function QuestionBank() {
                 value={typeFilter}
                 onChange={changeFilter(setTypeFilter)}
                 aria-label="Filter by type"
+                disabled={filtersDisabled}
               >
                 <option value="">Type</option>
                 <option value="mcq">MCQ</option>
@@ -503,6 +640,7 @@ export default function QuestionBank() {
                 value={difficultyFilter}
                 onChange={changeFilter(setDifficultyFilter)}
                 aria-label="Filter by difficulty"
+                disabled={filtersDisabled}
               >
                 <option value="">Difficulty</option>
                 <option value="easy">Easy</option>
@@ -512,14 +650,7 @@ export default function QuestionBank() {
             </Box>
           </Box>
 
-          {status === 'loading' && (
-            <Box className="d-flex align-items-center gap-2 py-5 justify-content-center">
-              <Spinner label="Loading questions…" />
-              <span className="text-muted">Loading questions…</span>
-            </Box>
-          )}
-
-          {status === 'error' && (
+          {!isGenerating && status === 'error' && (
             <Box className="py-3">
               <Alert variant="danger" className="mb-3">
                 {error}
@@ -530,17 +661,19 @@ export default function QuestionBank() {
             </Box>
           )}
 
-          {status === 'ready' && questions.length === 0 && (
+          {!isGenerating && status === 'ready' && questions.length === 0 && (
             <p className="text-muted text-center py-5 mb-0">
-              {hasActiveFilters
-                ? 'No questions match your search or filters.'
-                : isSelectMode
-                  ? 'No questions available for this exam class and subject.'
-                  : 'No questions yet. Add one or generate from Exam.'}
+              {isJobMode
+                ? 'No questions were created for this generation job.'
+                : hasActiveFilters
+                  ? 'No questions match your search or filters.'
+                  : isSelectMode
+                    ? 'No questions available for this exam class and subject.'
+                    : 'No questions yet. Add one or generate from Exam.'}
             </p>
           )}
 
-          {status === 'ready' && questions.length > 0 && (
+          {showTable && (
             <>
               <Box className="table-responsive">
                 <table className="table table-hover align-middle mb-0">
@@ -553,6 +686,7 @@ export default function QuestionBank() {
                           checked={allVisibleSelected}
                           onChange={(e) => toggleSelectAll(e.target.checked)}
                           aria-label="Select all questions on this page"
+                          disabled={isGenerating || status !== 'ready'}
                         />
                       </th>
                       <th scope="col">Question</th>
@@ -573,67 +707,117 @@ export default function QuestionBank() {
                     </tr>
                   </thead>
                   <tbody>
-                    {questions.map((question) => (
-                      <tr
-                        key={question.id}
-                        className={
-                          selectedIds.has(question.id) ? 'table-active' : undefined
-                        }
-                      >
-                        <td>
-                          <input
-                            className="form-check-input"
-                            type="checkbox"
-                            checked={selectedIds.has(question.id)}
-                            onChange={(e) =>
-                              toggleSelectOne(question, e.target.checked)
-                            }
-                            aria-label={`Select question ${question.id}`}
-                          />
-                        </td>
-                        <td>
-                          {isSelectMode ? (
-                            truncate(question.text)
-                          ) : (
-                            <button
-                              type="button"
-                              className="btn btn-link link-dark text-start text-decoration-none p-0"
-                              onClick={() => openEdit(question)}
-                            >
-                              {truncate(question.text)}
-                            </button>
-                          )}
-                        </td>
-                        <td>
-                          {TYPE_LABELS[question.question_type] ||
-                            question.question_type}
-                        </td>
-                        <td>{question.marks}</td>
-                        <td className="text-muted small">
-                          {topicsText(question.labels)}
-                        </td>
-                        {!isSelectMode && (
-                          <td>
-                            <span className="badge text-bg-light border">
-                              {createdByLabel(question.created_by)}
+                    {isGenerating || status === 'loading' ? (
+                      <tr>
+                        <td colSpan={tableColSpan} className="border-0">
+                          <Box
+                            className="d-flex flex-column align-items-center justify-content-center gap-3 py-5"
+                            aria-live="polite"
+                            aria-busy="true"
+                          >
+                            <Spinner
+                              label={
+                                isGenerating
+                                  ? 'Question generating…'
+                                  : 'Loading questions…'
+                              }
+                            />
+                            <span className="text-muted">
+                              {isGenerating
+                                ? 'Question generating…'
+                                : 'Loading questions…'}
                             </span>
-                          </td>
-                        )}
+                          </Box>
+                        </td>
                       </tr>
-                    ))}
+                    ) : (
+                      questions.map((question) => (
+                        <tr
+                          key={question.id}
+                          className={
+                            selectedIds.has(question.id)
+                              ? 'table-active'
+                              : undefined
+                          }
+                        >
+                          <td>
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              checked={selectedIds.has(question.id)}
+                              onChange={(e) =>
+                                toggleSelectOne(question, e.target.checked)
+                              }
+                              aria-label={`Select question ${question.id}`}
+                            />
+                          </td>
+                          <td>
+                            {isSelectMode ? (
+                              truncate(question.text)
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn btn-link link-dark text-start text-decoration-none p-0"
+                                onClick={() => openEdit(question)}
+                              >
+                                {truncate(question.text)}
+                              </button>
+                            )}
+                          </td>
+                          <td>
+                            {TYPE_LABELS[question.question_type] ||
+                              question.question_type}
+                          </td>
+                          <td>{question.marks}</td>
+                          <td className="text-muted small">
+                            {topicsText(question.labels)}
+                          </td>
+                          {!isSelectMode && (
+                            <td>
+                              <span className="badge text-bg-light border">
+                                {createdByLabel(question.created_by)}
+                              </span>
+                            </td>
+                          )}
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </Box>
 
-              <Pagination
-                className="mt-3"
-                page={page}
-                totalPages={totalPages}
-                count={totalCount}
-                pageSize={pageSize}
-                onChange={setPage}
-              />
+              {!isGenerating && status === 'ready' && questions.length > 0 && (
+                <Pagination
+                  className="mt-3"
+                  page={page}
+                  totalPages={totalPages}
+                  count={totalCount}
+                  pageSize={pageSize}
+                  onChange={setPage}
+                />
+              )}
             </>
+          )}
+
+          {isJobMode && jobReady && (
+            <Alert
+              variant="success"
+              className="mt-3 mb-0 py-2 d-flex flex-wrap align-items-center justify-content-between gap-2"
+            >
+              <span>
+                Generated{' '}
+                {generatedCount ?? totalCount} question
+                {(generatedCount ?? totalCount) === 1 ? '' : 's'} successfully.
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline-secondary"
+                onClick={clearJobFilter}
+              >
+                View all questions
+              </Button>
+            </Alert>
           )}
         </CardBody>
       </Card>

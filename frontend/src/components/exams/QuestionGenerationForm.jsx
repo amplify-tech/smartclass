@@ -1,13 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
 import { Controller, useForm, useWatch } from 'react-hook-form'
+import { useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
 import { listDocuments } from '../../api/documents'
-import {
-  createQuestionGenerationJob,
-  getQuestionGenerationJob,
-} from '../../api/questionGeneration'
+import { createQuestionGenerationJob } from '../../api/questionGeneration'
 import { useCatalog } from '../../contexts/CatalogContext'
 import { applyApiErrors } from '../../utils/apiErrors'
 import {
@@ -21,8 +19,6 @@ import {
   Spinner,
   Textarea,
 } from '../common_ui'
-
-const POLL_INTERVAL_MS = 2000
 
 const schema = z
   .object({
@@ -68,19 +64,16 @@ function buildQuestionTypes({ mcq, short, long }) {
 }
 
 export default function QuestionGenerationForm() {
+  const navigate = useNavigate()
   const { grades, subjects } = useCatalog()
   const [documents, setDocuments] = useState([])
-  const [jobId, setJobId] = useState(null)
-  const [jobStatus, setJobStatus] = useState(null)
-  const [jobError, setJobError] = useState(null)
-  const [successInfo, setSuccessInfo] = useState(null)
+  const [submitError, setSubmitError] = useState(null)
 
   const {
     register,
     control,
     handleSubmit,
     setError,
-    reset,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(schema),
@@ -118,63 +111,8 @@ export default function QuestionGenerationForm() {
     }
   }, [])
 
-  // Standard poll: while jobId is set, GET status until completed/failed.
-  useEffect(() => {
-    if (!jobId) return undefined
-
-    let cancelled = false
-    let timerId
-
-    async function poll() {
-      try {
-        const { data } = await getQuestionGenerationJob(jobId)
-        if (cancelled) return
-
-        setJobStatus(data.status)
-
-        if (data.status === 'completed') {
-          setSuccessInfo({
-            questionCount: data.question_ids?.length ?? 0,
-            jobId: data.id,
-          })
-          setJobError(null)
-          setJobId(null)
-          return
-        }
-
-        if (data.status === 'failed') {
-          setJobError(data.error_message || 'Question generation failed')
-          setSuccessInfo(null)
-          setJobId(null)
-          return
-        }
-
-        timerId = setTimeout(poll, POLL_INTERVAL_MS)
-      } catch (err) {
-        if (cancelled) return
-        setJobError(
-          err.response?.data?.detail ||
-            err.response?.data?.error ||
-            err.message ||
-            'Failed to check generation status',
-        )
-        setSuccessInfo(null)
-        setJobId(null)
-      }
-    }
-
-    poll()
-
-    return () => {
-      cancelled = true
-      clearTimeout(timerId)
-    }
-  }, [jobId])
-
   const onSubmit = async (values) => {
-    setJobError(null)
-    setSuccessInfo(null)
-    setJobStatus('pending')
+    setSubmitError(null)
 
     const payload = {
       grade: values.grade,
@@ -188,17 +126,18 @@ export default function QuestionGenerationForm() {
 
     try {
       const { data } = await createQuestionGenerationJob(payload)
-      setJobStatus(data.status)
-      setJobId(data.id)
+      navigate(
+        `/exams/question-bank?jobId=${encodeURIComponent(data.id)}`,
+      )
     } catch (err) {
-      setJobStatus(null)
       applyApiErrors(err, setError)
+      setSubmitError(
+        err.response?.data?.detail ||
+          err.response?.data?.error ||
+          err.message ||
+          null,
+      )
     }
-  }
-
-  function cancelGeneration() {
-    setJobId(null)
-    setJobStatus(null)
   }
 
   const readyDocuments = documents.filter((doc) => {
@@ -210,14 +149,7 @@ export default function QuestionGenerationForm() {
     return true
   })
 
-  const isPolling = Boolean(jobId)
-  const isBusy = isPolling || isSubmitting
-  const statusText =
-    jobStatus === 'running'
-      ? 'Generating questions…'
-      : jobStatus === 'pending'
-        ? 'Queued…'
-        : 'Working…'
+  const isBusy = isSubmitting
 
   return (
     <Box className="position-relative">
@@ -228,31 +160,14 @@ export default function QuestionGenerationForm() {
           aria-live="polite"
           aria-busy="true"
         >
-          <Spinner label={statusText} />
-          <p className="text-muted mb-0">{statusText}</p>
-          {isPolling && (
-            <Button
-              type="button"
-              variant="outline-secondary"
-              size="sm"
-              onClick={cancelGeneration}
-            >
-              Cancel
-            </Button>
-          )}
+          <Spinner label="Starting generation…" />
+          <p className="text-muted mb-0">Starting generation…</p>
         </Box>
       )}
 
-      {successInfo && (
-        <Alert variant="success" className="mb-3">
-          Generated {successInfo.questionCount} question
-          {successInfo.questionCount === 1 ? '' : 's'} successfully.
-        </Alert>
-      )}
-
-      {jobError && (
+      {submitError && (
         <Alert variant="danger" className="mb-3">
-          {jobError}
+          {submitError}
         </Alert>
       )}
 
@@ -411,27 +326,8 @@ export default function QuestionGenerationForm() {
 
         <Box className="d-flex gap-2">
           <Button type="submit" disabled={isBusy}>
-            {isBusy ? 'Generating…' : 'Generate questions'}
+            {isBusy ? 'Starting…' : 'Generate questions'}
           </Button>
-          {jobError && (
-            <Button type="submit" variant="outline-secondary" disabled={isBusy}>
-              Retry
-            </Button>
-          )}
-          {successInfo && (
-            <Button
-              type="button"
-              variant="outline-secondary"
-              disabled={isBusy}
-              onClick={() => {
-                setSuccessInfo(null)
-                setJobError(null)
-                reset()
-              }}
-            >
-              Generate again
-            </Button>
-          )}
         </Box>
       </form>
     </Box>

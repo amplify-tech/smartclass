@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 
 import { listQuestionGenerationJobs } from '../api/questionGeneration'
 import {
@@ -54,7 +54,12 @@ function questionTypesSummary(questionTypes) {
   return parts.length ? parts.join(', ') : '—'
 }
 
+function jobBankPath(jobId) {
+  return `/exams/question-bank?jobId=${encodeURIComponent(jobId)}`
+}
+
 export default function PendingTasksPage() {
+  const navigate = useNavigate()
   const { grades, subjects } = useCatalog()
   const [jobs, setJobs] = useState([])
   const [status, setStatus] = useState('loading')
@@ -161,6 +166,7 @@ export default function PendingTasksPage() {
               <table className="table table-hover align-middle mb-0">
                 <thead>
                   <tr>
+                    <th scope="col">Job</th>
                     <th scope="col">Status</th>
                     <th scope="col">Class</th>
                     <th scope="col">Subject</th>
@@ -178,7 +184,28 @@ export default function PendingTasksPage() {
                 </thead>
                 <tbody>
                   {filteredJobs.map((job) => (
-                    <tr key={job.id}>
+                    <tr
+                      key={job.id}
+                      role="link"
+                      tabIndex={0}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => navigate(jobBankPath(job.id))}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          navigate(jobBankPath(job.id))
+                        }
+                      }}
+                    >
+                      <td>
+                        <Link
+                          to={jobBankPath(job.id)}
+                          className="link-dark text-decoration-none fw-semibold"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          #{job.id}
+                        </Link>
+                      </td>
                       <td>
                         <span
                           className={`badge ${STATUS_BADGE[job.status] || 'text-bg-secondary'}`}
