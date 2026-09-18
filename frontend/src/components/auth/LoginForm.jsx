@@ -27,7 +27,7 @@ export default function LoginForm() {
     try {
       const { data } = await loginRequest(values)
       setTokens(data)
-      window.location.assign('/')
+      window.location.replace('/')
     } catch (error) {
       applyApiErrors(error, setError)
     }

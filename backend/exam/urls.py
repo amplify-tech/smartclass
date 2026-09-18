@@ -1,6 +1,11 @@
 from rest_framework.routers import SimpleRouter
 
-from exam.views import ExamViewSet, QuestionGenerationJobViewSet, QuestionViewSet
+from exam.views import (
+    ExamViewSet,
+    LabelViewSet,
+    QuestionGenerationJobViewSet,
+    QuestionViewSet,
+)
 
 router = SimpleRouter()
 router.register(
@@ -8,6 +13,7 @@ router.register(
     QuestionGenerationJobViewSet,
     basename='question-generation-job',
 )
+router.register('labels', LabelViewSet, basename='label')
 router.register('questions', QuestionViewSet, basename='question')
 router.register('exams', ExamViewSet, basename='exam')
 

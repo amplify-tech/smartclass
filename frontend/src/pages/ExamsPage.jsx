@@ -1,10 +1,15 @@
-import { Box } from '../components/common_ui'
+import QuestionGenerationForm from '../components/exams/QuestionGenerationForm'
+import { Box, Card, CardBody } from '../components/common_ui'
 
 export default function ExamsPage() {
   return (
     <Box>
-      <h1 className="h3 mb-2">Exam</h1>
-      <p className="text-muted mb-0">Create and manage exams.</p>
+      <Card className="position-relative overflow-hidden w-100">
+        <CardBody className="p-4">
+          <h2 className="h5 mb-3">Generate questions</h2>
+          <QuestionGenerationForm />
+        </CardBody>
+      </Card>
     </Box>
   )
 }
