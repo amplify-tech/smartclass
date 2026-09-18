@@ -17,6 +17,8 @@
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.88.0",
     "react-router-dom": "^7.18.4",
+    "react-sortablejs": "^6.1.4",
+    "sortablejs": "^1.15.7",
     "zod": "^4.6.5"
   },
   "devDependencies": {

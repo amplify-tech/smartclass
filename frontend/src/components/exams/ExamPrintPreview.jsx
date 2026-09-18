@@ -38,7 +38,7 @@ function QuestionBlock({ index, placement }) {
         <p className="exam-print-preview__question-text">
           Q{index}. {question.text || '—'}
         </p>
-        <span className="exam-print-preview__marks">[{marks}]</span>
+        <span className="exam-print-preview__marks">({marks})</span>
       </div>
 
       {type === 'mcq' && options.length > 0 && (
@@ -49,23 +49,6 @@ function QuestionBlock({ index, placement }) {
             </li>
           ))}
         </ul>
-      )}
-
-      {type === 'short' && (
-        <div className="exam-print-preview__answer-space" aria-hidden="true">
-          <div className="exam-print-preview__answer-line" />
-          <div className="exam-print-preview__answer-line" />
-        </div>
-      )}
-
-      {type === 'long' && (
-        <div className="exam-print-preview__answer-space" aria-hidden="true">
-          <div className="exam-print-preview__answer-line" />
-          <div className="exam-print-preview__answer-line" />
-          <div className="exam-print-preview__answer-line" />
-          <div className="exam-print-preview__answer-line" />
-          <div className="exam-print-preview__answer-line" />
-        </div>
       )}
     </li>
   )
@@ -122,10 +105,8 @@ export default function ExamPrintPreview({
           <div className="exam-print-preview__student-row">
             <span className="exam-print-preview__meta-label">Name:</span>
             <span className="exam-print-preview__blank" />
-          </div>
-          <div className="exam-print-preview__student-row">
             <span className="exam-print-preview__meta-label">Roll No:</span>
-            <span className="exam-print-preview__blank" />
+            <span className="exam-print-preview__blank exam-print-preview__blank--roll" />
           </div>
         </div>
 

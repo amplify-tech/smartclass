@@ -75,8 +75,6 @@
 }
 
 .exam-print-preview__student {
-  display: grid;
-  gap: 0.65rem;
   margin-bottom: 1.15rem;
 }
 
@@ -84,6 +82,11 @@
   display: flex;
   align-items: baseline;
   gap: 0.4rem;
+}
+
+.exam-print-preview__blank--roll {
+  flex: 0 1 8rem;
+  min-width: 5rem;
 }
 
 .exam-print-preview__instructions {
@@ -119,7 +122,7 @@
 .exam-print-preview__question {
   break-inside: avoid;
   page-break-inside: avoid;
-  margin-bottom: 1.35rem;
+  margin-bottom: 0.85rem;
 }
 
 .exam-print-preview__question-header {
@@ -149,16 +152,6 @@
 
 .exam-print-preview__options li {
   margin-bottom: 0.25rem;
-}
-
-.exam-print-preview__answer-space {
-  margin-top: 0.5rem;
-}
-
-.exam-print-preview__answer-line {
-  border-bottom: 1px solid #999;
-  height: 1.35em;
-  margin-top: 0.55rem;
 }
 
 .exam-print-preview__empty {

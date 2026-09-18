@@ -57,11 +57,12 @@ export default function ExamPreviewPage() {
   useEffect(() => {
     if (!exam?.title) return undefined
     const previous = document.title
-    document.title = exam.title
+    const parts = [exam.title, subjectName, gradeName].filter(Boolean)
+    document.title = parts.join(' - ')
     return () => {
       document.title = previous
     }
-  }, [exam?.title])
+  }, [exam?.title, subjectName, gradeName])
 
   const handlePrint = () => {
     window.print()

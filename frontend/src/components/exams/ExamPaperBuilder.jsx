@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { ReactSortable } from 'react-sortablejs'
 
 import {
   getExam,
@@ -102,18 +103,6 @@ export default function ExamPaperBuilder({ examId }) {
   useEffect(() => {
     loadExam()
   }, [loadExam])
-
-  function movePlacement(index, direction) {
-    setPlacements((prev) => {
-      const target = index + direction
-      if (target < 0 || target >= prev.length) return prev
-      const next = [...prev]
-      ;[next[index], next[target]] = [next[target], next[index]]
-      return next
-    })
-    setSaveError(null)
-    setSaveStatus('idle')
-  }
 
   function removePlacement(examQuestionId) {
     setPlacements((prev) => prev.filter((item) => item.id !== examQuestionId))
@@ -229,7 +218,19 @@ export default function ExamPaperBuilder({ examId }) {
               </Button>
             </Box>
           ) : (
-            <Box as="ul" className="list-unstyled mb-0">
+            <ReactSortable
+              tag="ul"
+              className="list-unstyled mb-0"
+              list={placements}
+              setList={(next) => {
+                setPlacements(next)
+                setSaveError(null)
+                setSaveStatus('idle')
+              }}
+              handle=".drag-handle"
+              disabled={saveStatus === 'saving'}
+              animation={150}
+            >
               {placements.map((placement, index) => {
                 const question = placement.question || {}
                 const topics = topicsText(question.labels)
@@ -241,53 +242,37 @@ export default function ExamPaperBuilder({ examId }) {
                 const marksLabel = `${marks} mark${marks === 1 ? '' : 's'}`
 
                 return (
-                  <Box
-                    as="li"
-                    key={placement.id}
-                    className="border-bottom py-3"
-                  >
+                  <li key={placement.id} className="border-bottom py-3">
                     <Box className="d-flex flex-wrap align-items-start justify-content-between gap-3">
-                      <Box className="flex-grow-1 min-w-0">
-                        <p className="mb-1 fw-medium">
-                          Q{index + 1}. {question.text || '—'}
-                        </p>
-                        <p className="mb-0 small text-muted">
-                          {typeLabel}
-                          <span className="mx-1">·</span>
-                          {marksLabel}
-                          {topics ? (
-                            <>
-                              <span className="mx-1">·</span>
-                              {topics}
-                            </>
-                          ) : null}
-                        </p>
+                      <Box className="d-flex align-items-start gap-2 flex-grow-1 min-w-0">
+                        <button
+                          type="button"
+                          className="drag-handle btn btn-link btn-sm text-muted px-1 py-0 lh-1"
+                          style={{ cursor: 'grab', userSelect: 'none' }}
+                          aria-label={`Drag to reorder question ${index + 1}`}
+                          disabled={saveStatus === 'saving'}
+                        >
+                          ⋮⋮
+                        </button>
+                        <Box className="flex-grow-1 min-w-0">
+                          <p className="mb-1 fw-medium">
+                            Q{index + 1}. {question.text || '—'}
+                          </p>
+                          <p className="mb-0 small text-muted">
+                            {typeLabel}
+                            <span className="mx-1">·</span>
+                            {marksLabel}
+                            {topics ? (
+                              <>
+                                <span className="mx-1">·</span>
+                                {topics}
+                              </>
+                            ) : null}
+                          </p>
+                        </Box>
                       </Box>
 
                       <Box className="d-flex flex-wrap gap-2 flex-shrink-0">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline-secondary"
-                          disabled={index === 0 || saveStatus === 'saving'}
-                          onClick={() => movePlacement(index, -1)}
-                          aria-label={`Move question ${index + 1} up`}
-                        >
-                          ↑
-                        </Button>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline-secondary"
-                          disabled={
-                            index === placements.length - 1 ||
-                            saveStatus === 'saving'
-                          }
-                          onClick={() => movePlacement(index, 1)}
-                          aria-label={`Move question ${index + 1} down`}
-                        >
-                          ↓
-                        </Button>
                         <Button
                           type="button"
                           size="sm"
@@ -299,10 +284,10 @@ export default function ExamPaperBuilder({ examId }) {
                         </Button>
                       </Box>
                     </Box>
-                  </Box>
+                  </li>
                 )
               })}
-            </Box>
+            </ReactSortable>
           )}
 
           {placements.length > 0 && (
