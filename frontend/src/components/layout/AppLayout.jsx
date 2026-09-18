@@ -5,6 +5,7 @@ import { clearTokens, isAuthenticated } from '../../utils/authTokens'
 
 const SIDEBAR_ITEMS = [
   { to: '/', label: 'Home', end: true },
+  { to: '/question-bank', label: 'Question Bank' },
   { to: '/exams', label: 'Exam' },
   { to: '/documents', label: 'Document' },
   { to: '/ppts', label: 'PPT' },

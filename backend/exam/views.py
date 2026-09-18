@@ -3,7 +3,15 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from exam.models import Exam, ExamQuestion, Label, Question, QuestionGenerationJob
+from exam.models import (
+    Difficulty,
+    Exam,
+    ExamQuestion,
+    Label,
+    Question,
+    QuestionGenerationJob,
+    QuestionType,
+)
 from exam.serializers import (
     AddExamQuestionsSerializer,
     ExamListSerializer,
@@ -25,6 +33,7 @@ class QuestionGenerationJobViewSet(
 ):
     serializer_class = QuestionGenerationJobSerializer
     http_method_names = ['get', 'post', 'head', 'options']
+    pagination_class = None
 
     def get_queryset(self):
         return QuestionGenerationJob.objects.filter(
@@ -53,6 +62,7 @@ class LabelViewSet(
     queryset = Label.objects.all()
     serializer_class = LabelSerializer
     http_method_names = ['get', 'post', 'head', 'options']
+    pagination_class = None
 
 
 class QuestionViewSet(viewsets.ModelViewSet):
@@ -67,12 +77,29 @@ class QuestionViewSet(viewsets.ModelViewSet):
         )
 
         params = self.request.query_params
+
+        search = (params.get('search') or '').strip()
+        if search:
+            qs = qs.filter(text__icontains=search)
+
+        question_type = (params.get('question_type') or '').strip().lower()
+        if question_type:
+            valid_types = {choice.value for choice in QuestionType}
+            if question_type in valid_types:
+                qs = qs.filter(question_type=question_type)
+
+        difficulty = (params.get('difficulty') or '').strip().lower()
+        if difficulty:
+            valid_difficulties = {choice.value for choice in Difficulty}
+            if difficulty in valid_difficulties:
+                qs = qs.filter(difficulty=difficulty)
+
         grade = params.get('grade')
-        if grade is not None:
+        if grade is not None and grade != '':
             qs = qs.filter(grade_id=grade)
 
         subject = params.get('subject')
-        if subject is not None:
+        if subject is not None and subject != '':
             qs = qs.filter(subject_id=subject)
 
         label_ids = params.getlist('label')

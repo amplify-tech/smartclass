@@ -7,6 +7,7 @@ import DocumentsPage from './pages/DocumentsPage'
 import ExamsPage from './pages/ExamsPage'
 import HomePage from './pages/HomePage'
 import PptsPage from './pages/PptsPage'
+import QuestionBankPage from './pages/QuestionBankPage'
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           }
         >
           <Route path="/" element={<HomePage />} />
+          <Route path="/question-bank" element={<QuestionBankPage />} />
           <Route path="/exams" element={<ExamsPage />} />
           <Route path="/documents" element={<DocumentsPage />} />
           <Route path="/ppts" element={<PptsPage />} />
