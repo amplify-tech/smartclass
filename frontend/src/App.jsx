@@ -7,6 +7,8 @@ import { CatalogProvider } from './contexts/CatalogContext'
 import AuthPage from './pages/AuthPage'
 import CreateExamPage from './pages/CreateExamPage'
 import DocumentsPage from './pages/DocumentsPage'
+import ExamPaperBuilderPage from './pages/ExamPaperBuilderPage'
+import ExamPreviewPage from './pages/ExamPreviewPage'
 import ExamsPage from './pages/ExamsPage'
 import GenerateQuestionsPage from './pages/GenerateQuestionsPage'
 import HomePage from './pages/HomePage'
@@ -48,6 +50,8 @@ function App() {
             <Route path="/exams/generate" element={<GenerateQuestionsPage />} />
             <Route path="/exams/pending-tasks" element={<PendingTasksPage />} />
             <Route path="/exams/create" element={<CreateExamPage />} />
+            <Route path="/exams/:examId/build" element={<ExamPaperBuilderPage />} />
+            <Route path="/exams/:examId/preview" element={<ExamPreviewPage />} />
 
             {/* Legacy redirects */}
             <Route

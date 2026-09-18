@@ -164,14 +164,32 @@ export default function ExamsPage() {
                           {formatDate(exam.created_at)}
                         </td>
                         <td className="text-end text-nowrap">
-                          <Button
-                            as={Link}
-                            to={`/exams/question-bank?mode=select&examId=${encodeURIComponent(exam.id)}`}
-                            size="sm"
-                            variant="outline-primary"
-                          >
-                            Add questions
-                          </Button>
+                          <Box className="d-inline-flex flex-wrap gap-2 justify-content-end">
+                            <Button
+                              as={Link}
+                              to={`/exams/${encodeURIComponent(exam.id)}/build`}
+                              size="sm"
+                              variant="outline"
+                            >
+                              Build paper
+                            </Button>
+                            <Button
+                              as={Link}
+                              to={`/exams/${encodeURIComponent(exam.id)}/preview`}
+                              size="sm"
+                              variant="outline-secondary"
+                            >
+                              Preview
+                            </Button>
+                            <Button
+                              as={Link}
+                              to={`/exams/question-bank?mode=select&examId=${encodeURIComponent(exam.id)}`}
+                              size="sm"
+                              variant="outline-secondary"
+                            >
+                              Add questions
+                            </Button>
+                          </Box>
                         </td>
                       </tr>
                     ))}

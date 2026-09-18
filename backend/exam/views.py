@@ -122,7 +122,8 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
 
 class ExamViewSet(viewsets.ModelViewSet):
-    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
+    # put required for reorder-questions action
+    http_method_names = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
 
     def get_serializer_class(self):
         if self.action == 'list':

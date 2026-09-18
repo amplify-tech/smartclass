@@ -307,7 +307,7 @@ export default function QuestionBank() {
         question_ids: [...selectedMap.keys()],
       })
       setSubmitStatus('success')
-      navigate('/exams')
+      navigate(`/exams/${encodeURIComponent(examId)}/build`)
     } catch (err) {
       setSubmitStatus('error')
       setSubmitError(
@@ -363,6 +363,10 @@ export default function QuestionBank() {
     )
   }
 
+  const builderPath = examId
+    ? `/exams/${encodeURIComponent(examId)}/build`
+    : '/exams'
+
   if (isSelectMode && examStatus === 'error') {
     return (
       <Box>
@@ -385,11 +389,11 @@ export default function QuestionBank() {
         <Box className="mb-4">
           <Button
             as={Link}
-            to="/exams"
+            to={builderPath}
             variant="link"
             className="px-0 mb-2"
           >
-            ← Back to Exam List
+            ← Back to Paper Builder
           </Button>
           <h1 className="h4 mb-1">Select Questions</h1>
           <p className="text-muted mb-2">

@@ -184,7 +184,17 @@ class Exam(models.Model):
         FINALIZED = 'finalized', 'Finalized'
 
     title = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
+    description = models.TextField(
+        blank=True,
+        help_text='Exam instructions shown on the printed paper.',
+    )
+    school_name = models.CharField(
+        max_length=255,
+        help_text='Institution name printed at the top of the exam paper.',
+    )
+    duration_minutes = models.PositiveSmallIntegerField(
+        help_text='Allowed time for the exam, in minutes.',
+    )
     grade = models.ForeignKey(
         Grade,
         on_delete=models.PROTECT,

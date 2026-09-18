@@ -14,14 +14,21 @@ import {
   FormField,
   FormRootError,
   Input,
+  IntegerInput,
   Select,
   Textarea,
 } from '../common_ui'
 
 const schema = z.object({
   title: z.string().trim().min(1, 'Enter an exam name').max(255),
+  school_name: z.string().trim().min(1, 'Enter a school name').max(255),
   subject: z.coerce.number().int().positive('Select a subject'),
   grade: z.coerce.number().int().positive('Select a class'),
+  duration_minutes: z.coerce
+    .number()
+    .int('Enter whole minutes')
+    .min(1, 'Duration must be at least 1 minute')
+    .max(600, 'Duration cannot exceed 600 minutes'),
   description: z.string().optional().or(z.literal('')),
 })
 
@@ -38,8 +45,10 @@ export default function CreateExamForm() {
     resolver: zodResolver(schema),
     defaultValues: {
       title: '',
+      school_name: '',
       subject: '',
       grade: '',
+      duration_minutes: 60,
       description: '',
     },
   })
@@ -47,8 +56,10 @@ export default function CreateExamForm() {
   const onSubmit = async (values) => {
     const payload = {
       title: values.title.trim(),
+      school_name: values.school_name.trim(),
       subject: values.subject,
       grade: values.grade,
+      duration_minutes: values.duration_minutes,
       description: values.description?.trim() || '',
     }
 
@@ -66,6 +77,14 @@ export default function CreateExamForm() {
     <Card>
       <CardBody className="p-4">
         <form onSubmit={handleSubmit(onSubmit)} noValidate>
+          <FormField
+            id="exam-school-name"
+            label="School name"
+            error={errors.school_name?.message}
+          >
+            <Input disabled={isSubmitting} {...register('school_name')} />
+          </FormField>
+
           <FormField
             id="exam-title"
             label="Exam name"
@@ -109,6 +128,19 @@ export default function CreateExamForm() {
           </Box>
 
           <FormField
+            id="exam-duration"
+            label="Duration (minutes)"
+            error={errors.duration_minutes?.message}
+          >
+            <IntegerInput
+              disabled={isSubmitting}
+              min={1}
+              max={600}
+              {...register('duration_minutes')}
+            />
+          </FormField>
+
+          <FormField
             id="exam-instructions"
             label="Instructions (optional)"
             error={errors.description?.message}
@@ -116,6 +148,7 @@ export default function CreateExamForm() {
             <Textarea
               disabled={isSubmitting}
               rows={3}
+              placeholder={'Answer all questions.\nRead each question carefully.'}
               {...register('description')}
             />
           </FormField>

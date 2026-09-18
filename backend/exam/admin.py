@@ -75,8 +75,10 @@ class OptionAdmin(admin.ModelAdmin):
 class ExamAdmin(admin.ModelAdmin):
     list_display = (
         'title',
+        'school_name',
         'grade',
         'subject',
+        'duration_minutes',
         'difficulty',
         'question_count',
         'total_marks',
@@ -85,7 +87,7 @@ class ExamAdmin(admin.ModelAdmin):
         'created_at',
     )
     list_filter = ('status', 'difficulty', 'grade', 'subject')
-    search_fields = ('title',)
+    search_fields = ('title', 'school_name')
     raw_id_fields = ('created_by',)
     inlines = (ExamQuestionInline,)
     readonly_fields = ('question_count', 'total_marks')

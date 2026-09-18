@@ -1,3 +1,4 @@
+from django.db import transaction
 from rest_framework import serializers
 
 from exam.models import (
@@ -22,6 +23,18 @@ class OptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Option
         fields = ('id', 'text', 'is_correct', 'order')
+        read_only_fields = ('id',)
+
+    def validate_text(self, value):
+        text = (value or '').strip()
+        if not text:
+            raise serializers.ValidationError('Option text is required.')
+        return text
+
+    def validate_order(self, value):
+        if value is None or value < 1:
+            raise serializers.ValidationError('Order must be at least 1.')
+        return value
 
 
 class QuestionCreatedBySerializer(serializers.Serializer):
@@ -71,22 +84,101 @@ class QuestionSerializer(serializers.ModelSerializer):
             'updated_at',
         )
 
+    def validate(self, attrs):
+        question_type = attrs.get(
+            'question_type',
+            getattr(self.instance, 'question_type', None),
+        )
+        options_provided = 'options' in attrs
+        options = attrs.get('options') or []
+
+        if question_type == QuestionType.MCQ:
+            creating = self.instance is None
+            switching_to_mcq = (
+                self.instance is not None
+                and self.instance.question_type != QuestionType.MCQ
+                and attrs.get('question_type') == QuestionType.MCQ
+            )
+            if creating or switching_to_mcq:
+                if not options_provided:
+                    raise serializers.ValidationError(
+                        {'options': 'MCQ requires at least two options.'},
+                    )
+                self._validate_mcq_options(options)
+            elif options_provided:
+                self._validate_mcq_options(options)
+        elif options_provided and options:
+            raise serializers.ValidationError(
+                {'options': 'Only MCQ questions may include options.'},
+            )
+
+        return attrs
+
+    def _validate_mcq_options(self, options):
+        if len(options) < 2:
+            raise serializers.ValidationError(
+                {'options': 'Add at least two options.'},
+            )
+        if len(options) > 6:
+            raise serializers.ValidationError(
+                {'options': 'At most six options are allowed.'},
+            )
+
+        orders = [opt['order'] for opt in options]
+        if len(orders) != len(set(orders)):
+            raise serializers.ValidationError(
+                {'options': 'Option order values must be unique.'},
+            )
+
+        correct_count = sum(1 for opt in options if opt.get('is_correct'))
+        if correct_count != 1:
+            raise serializers.ValidationError(
+                {'options': 'Exactly one option must be marked correct.'},
+            )
+
+    @staticmethod
+    def _replace_options(question, options):
+        question.options.all().delete()
+        if not options:
+            return
+        Option.objects.bulk_create(
+            [
+                Option(
+                    question=question,
+                    text=opt['text'],
+                    is_correct=bool(opt.get('is_correct', False)),
+                    order=opt['order'],
+                )
+                for opt in options
+            ],
+        )
+
+    @transaction.atomic
     def create(self, validated_data):
-        validated_data.pop('options', None)  # TODO: create Option rows for MCQ
+        options = validated_data.pop('options', [])
         labels = validated_data.pop('labels', None)
         question = Question.objects.create(**validated_data)
         if labels is not None:
             question.labels.set(labels)
+        if question.question_type == QuestionType.MCQ:
+            self._replace_options(question, options)
         return question
 
+    @transaction.atomic
     def update(self, instance, validated_data):
-        validated_data.pop('options', None)  # TODO: sync Option rows
+        options = validated_data.pop('options', None)
         labels = validated_data.pop('labels', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
         if labels is not None:
             instance.labels.set(labels)
+
+        if instance.question_type != QuestionType.MCQ:
+            instance.options.all().delete()
+        elif options is not None:
+            self._replace_options(instance, options)
+
         return instance
 
 
@@ -171,6 +263,8 @@ class ExamSerializer(serializers.ModelSerializer):
             'id',
             'title',
             'description',
+            'school_name',
+            'duration_minutes',
             'grade',
             'subject',
             'difficulty',
@@ -189,6 +283,19 @@ class ExamSerializer(serializers.ModelSerializer):
             'updated_at',
         )
 
+    def validate_school_name(self, value):
+        name = (value or '').strip()
+        if not name:
+            raise serializers.ValidationError('School name is required.')
+        return name
+
+    def validate_duration_minutes(self, value):
+        if value is None or value < 1:
+            raise serializers.ValidationError(
+                'Duration must be at least 1 minute.',
+            )
+        return value
+
 
 class ExamListSerializer(serializers.ModelSerializer):
     class Meta:
@@ -196,6 +303,8 @@ class ExamListSerializer(serializers.ModelSerializer):
         fields = (
             'id',
             'title',
+            'school_name',
+            'duration_minutes',
             'grade',
             'subject',
             'difficulty',

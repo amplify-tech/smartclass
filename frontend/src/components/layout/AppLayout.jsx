@@ -26,7 +26,7 @@ export default function AppLayout() {
 
   return (
     <Box className="min-vh-100 d-flex flex-column bg-white">
-      <Navbar>
+      <Navbar className="d-print-none">
         {displayName ? (
           <Box as="span" className="text-secondary small">
             {displayName}
@@ -43,8 +43,8 @@ export default function AppLayout() {
       </Navbar>
 
       <Box className="d-flex flex-grow-1">
-        <Sidebar items={SIDEBAR_ITEMS} />
-        <Box as="main" className="flex-grow-1 p-4 overflow-auto">
+        <Sidebar className="d-print-none" items={SIDEBAR_ITEMS} />
+        <Box as="main" className="flex-grow-1 p-4 overflow-auto exam-print-main">
           <Outlet />
         </Box>
       </Box>

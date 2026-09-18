@@ -28,3 +28,34 @@ export function deleteExam(id) {
 export function addExamQuestions(examId, payload) {
   return client.post(`/exams/${examId}/questions/`, payload)
 }
+
+/**
+ * Reorder questions on an exam.
+ * @param {number|string} examId
+ * @param {{ items: { exam_question_id: number, order: number }[] }} payload
+ */
+export function reorderExamQuestions(examId, payload) {
+  return client.put(`/exams/${examId}/reorder-questions/`, payload)
+}
+
+/**
+ * Remove a placed question from an exam.
+ * @param {number|string} examId
+ * @param {number|string} examQuestionId
+ */
+export function removeExamQuestion(examId, examQuestionId) {
+  return client.delete(`/exams/${examId}/exam-questions/${examQuestionId}/`)
+}
+
+/**
+ * Update a placed question (order and/or marks).
+ * @param {number|string} examId
+ * @param {number|string} examQuestionId
+ * @param {{ order?: number, marks?: number }} payload
+ */
+export function updateExamQuestion(examId, examQuestionId, payload) {
+  return client.patch(
+    `/exams/${examId}/exam-questions/${examQuestionId}/`,
+    payload,
+  )
+}
