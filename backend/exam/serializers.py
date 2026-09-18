@@ -24,9 +24,16 @@ class OptionSerializer(serializers.ModelSerializer):
         fields = ('id', 'text', 'is_correct', 'order')
 
 
+class QuestionCreatedBySerializer(serializers.Serializer):
+    id = serializers.IntegerField()
+    email = serializers.EmailField()
+    first_name = serializers.CharField()
+
+
 class QuestionSerializer(serializers.ModelSerializer):
     options = OptionSerializer(many=True, required=False)
     labels = LabelSerializer(many=True, read_only=True)
+    created_by = QuestionCreatedBySerializer(read_only=True)
     label_ids = serializers.PrimaryKeyRelatedField(
         source='labels',
         many=True,
@@ -51,6 +58,7 @@ class QuestionSerializer(serializers.ModelSerializer):
             'source_document',
             'generation_job',
             'options',
+            'created_by',
             'created_at',
             'updated_at',
         )
@@ -58,6 +66,7 @@ class QuestionSerializer(serializers.ModelSerializer):
             'id',
             'source_document',
             'generation_job',
+            'created_by',
             'created_at',
             'updated_at',
         )

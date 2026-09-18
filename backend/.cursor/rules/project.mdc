@@ -1,5 +1,5 @@
 ---
-alwaysApply: true
+alwaysApply: false
 ---
 # smartclass
 
@@ -37,6 +37,10 @@ use  LLM and RAG for exam generation
 - Prefer DRF **ViewSets** for standard CRUD.
 - Use **APIView** when the endpoint is simple/custom/nested and a ViewSet would be awkward.
 
+### Authorization 
+use intelligece at selecting authorisation types like shared(no created by), owner only, shared read but owner write 
+Never decode JWT on the frontend
+Backend automicaly set user id / created_by / uploaded_by  on resources
 
 ## Rules
 - Keep architecture simple and practical.
@@ -46,3 +50,4 @@ use  LLM and RAG for exam generation
 - Use patterns only when they teach/usefully solve something.
 - Never hardcode secrets.
 - Don't modify unrelated code.
+

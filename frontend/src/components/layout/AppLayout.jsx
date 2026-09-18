@@ -1,7 +1,8 @@
 import { Outlet } from 'react-router-dom'
 
-import { Box, Button, Navbar, Sidebar } from '../common_ui'
+import { useCatalog } from '../../contexts/CatalogContext'
 import { redirectToAuth } from '../../utils/authRedirect'
+import { Box, Button, Navbar, Sidebar } from '../common_ui'
 
 const SIDEBAR_ITEMS = [
   { to: '/', label: 'Home', end: true },
@@ -12,18 +13,23 @@ const SIDEBAR_ITEMS = [
 ]
 
 export default function AppLayout() {
-  const handleLogout = () => {
-    redirectToAuth()
-  }
+  const { user } = useCatalog()
+  const displayName =
+    String(user?.first_name || '').trim() || user?.email || ''
 
   return (
     <Box className="min-vh-100 d-flex flex-column bg-white">
       <Navbar>
+        {displayName ? (
+          <Box as="span" className="text-secondary small">
+            {displayName}
+          </Box>
+        ) : null}
         <Button
           type="button"
           variant="outline-secondary"
           size="sm"
-          onClick={handleLogout}
+          onClick={redirectToAuth}
         >
           Sign out
         </Button>

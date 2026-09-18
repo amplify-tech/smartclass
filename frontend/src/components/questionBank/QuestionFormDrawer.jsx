@@ -167,6 +167,7 @@ export default function QuestionFormDrawer({
   const [newTopic, setNewTopic] = useState('')
   const [topicError, setTopicError] = useState(null)
   const [addingTopic, setAddingTopic] = useState(false)
+  const readOnly = mode === 'view'
 
   const {
     register,
@@ -186,7 +187,7 @@ export default function QuestionFormDrawer({
     if (!open) return
     setNewTopic('')
     setTopicError(null)
-    if (mode === 'edit' && question) {
+    if ((mode === 'edit' || mode === 'view') && question) {
       reset(questionToFormValues(question))
     } else {
       reset(emptyDefaults)
@@ -194,6 +195,7 @@ export default function QuestionFormDrawer({
   }, [open, mode, question, reset])
 
   const onSubmit = async (values) => {
+    if (readOnly) return
     const payload = buildPayload(values)
     try {
       const { data } =
@@ -242,7 +244,17 @@ export default function QuestionFormDrawer({
     }
   }
 
-  const title = mode === 'edit' ? 'Edit Question' : 'Add Question'
+  const title =
+    mode === 'view'
+      ? 'View Question'
+      : mode === 'edit'
+        ? 'Edit Question'
+        : 'Add Question'
+  const createdByName =
+    (mode === 'edit' || mode === 'view') && question?.created_by
+      ? String(question.created_by.first_name || '').trim() ||
+        question.created_by.email
+      : null
 
   return (
     <Offcanvas
@@ -258,19 +270,29 @@ export default function QuestionFormDrawer({
             disabled={isSubmitting}
             onClick={onClose}
           >
-            Cancel
+            {readOnly ? 'Close' : 'Cancel'}
           </Button>
-          <Button
-            type="submit"
-            form="question-bank-form"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Saving…' : 'Save'}
-          </Button>
+          {!readOnly && (
+            <Button
+              type="submit"
+              form="question-bank-form"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Saving…' : 'Save'}
+            </Button>
+          )}
         </>
       }
     >
       <form id="question-bank-form" onSubmit={handleSubmit(onSubmit)} noValidate>
+        <fieldset disabled={readOnly} className="border-0 p-0 m-0">
+        {createdByName && (
+          <p className="text-muted small mb-3">
+            Created by{' '}
+            <span className="badge text-bg-light border">{createdByName}</span>
+          </p>
+        )}
+
         <FormField
           id="qb-text"
           label="Question"
@@ -409,71 +431,77 @@ export default function QuestionFormDrawer({
                           className="badge text-bg-light border d-inline-flex align-items-center gap-1"
                         >
                           {label.name}
-                          <button
-                            type="button"
-                            className="btn-close"
-                            style={{ fontSize: '0.55rem' }}
-                            aria-label={`Remove ${label.name}`}
-                            onClick={() =>
-                              field.onChange(
-                                field.value.filter((id) => id !== label.id),
-                              )
-                            }
-                          />
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              className="btn-close"
+                              style={{ fontSize: '0.55rem' }}
+                              aria-label={`Remove ${label.name}`}
+                              onClick={() =>
+                                field.onChange(
+                                  field.value.filter((id) => id !== label.id),
+                                )
+                              }
+                            />
+                          )}
                         </span>
                       ))}
                     </Box>
                   )}
 
-                  <Box className="d-flex gap-2 align-items-start">
-                    <Select
-                      className="flex-grow-1"
-                      value=""
-                      onChange={(e) => {
-                        const id = Number(e.target.value)
-                        if (!id || field.value.includes(id)) return
-                        field.onChange([...field.value, id])
-                      }}
-                    >
-                      <option value="">Add existing topic…</option>
-                      {available.map((label) => (
-                        <option key={label.id} value={label.id}>
-                          {label.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Box>
+                  {!readOnly && (
+                    <>
+                      <Box className="d-flex gap-2 align-items-start">
+                        <Select
+                          className="flex-grow-1"
+                          value=""
+                          onChange={(e) => {
+                            const id = Number(e.target.value)
+                            if (!id || field.value.includes(id)) return
+                            field.onChange([...field.value, id])
+                          }}
+                        >
+                          <option value="">Add existing topic…</option>
+                          {available.map((label) => (
+                            <option key={label.id} value={label.id}>
+                              {label.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </Box>
 
-                  <Box className="d-flex gap-2 mt-2">
-                    <Input
-                      placeholder="New topic"
-                      value={newTopic}
-                      onChange={(e) => setNewTopic(e.target.value)}
-                      onKeyDown={async (e) => {
-                        if (e.key !== 'Enter') return
-                        e.preventDefault()
-                        const created = await handleAddTopic()
-                        if (created && !field.value.includes(created.id)) {
-                          field.onChange([...field.value, created.id])
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline-secondary"
-                      disabled={addingTopic}
-                      onClick={async () => {
-                        const created = await handleAddTopic()
-                        if (created && !field.value.includes(created.id)) {
-                          field.onChange([...field.value, created.id])
-                        }
-                      }}
-                    >
-                      + Add
-                    </Button>
-                  </Box>
-                  {topicError && (
-                    <div className="invalid-feedback d-block">{topicError}</div>
+                      <Box className="d-flex gap-2 mt-2">
+                        <Input
+                          placeholder="New topic"
+                          value={newTopic}
+                          onChange={(e) => setNewTopic(e.target.value)}
+                          onKeyDown={async (e) => {
+                            if (e.key !== 'Enter') return
+                            e.preventDefault()
+                            const created = await handleAddTopic()
+                            if (created && !field.value.includes(created.id)) {
+                              field.onChange([...field.value, created.id])
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline-secondary"
+                          disabled={addingTopic}
+                          onClick={async () => {
+                            const created = await handleAddTopic()
+                            if (created && !field.value.includes(created.id)) {
+                              field.onChange([...field.value, created.id])
+                            }
+                          }}
+                        >
+                          + Add
+                        </Button>
+                      </Box>
+                      {topicError && (
+                        <div className="invalid-feedback d-block">{topicError}</div>
+                      )}
+                    </>
                   )}
                 </Box>
               )
@@ -495,6 +523,7 @@ export default function QuestionFormDrawer({
         </FormField>
 
         <FormRootError message={errors.root?.message} />
+        </fieldset>
       </form>
     </Offcanvas>
   )

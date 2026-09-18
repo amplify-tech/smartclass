@@ -1,4 +1,4 @@
-from rest_framework import viewsets
+from rest_framework import mixins, viewsets
 
 from document.models import Document, Grade, Subject
 from document.serializers import (
@@ -8,21 +8,31 @@ from document.serializers import (
 )
 
 
-class GradeViewSet(viewsets.ReadOnlyModelViewSet):
+class GradeViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
     queryset = Grade.objects.all()
     serializer_class = GradeSerializer
+    http_method_names = ['get', 'post', 'head', 'options']
     pagination_class = None
 
 
-class SubjectViewSet(viewsets.ReadOnlyModelViewSet):
+class SubjectViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
     queryset = Subject.objects.all()
     serializer_class = SubjectSerializer
+    http_method_names = ['get', 'post', 'head', 'options']
     pagination_class = None
 
 
 class DocumentViewSet(viewsets.ReadOnlyModelViewSet):
-    """Teacher documents for exam material selection."""
-
     serializer_class = DocumentSerializer
     pagination_class = None
 

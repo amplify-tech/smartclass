@@ -41,8 +41,14 @@ function topicsText(labels) {
   return labels.map((label) => label.name).join(', ')
 }
 
+function createdByLabel(createdBy) {
+  if (!createdBy) return '—'
+  const name = String(createdBy.first_name || '').trim()
+  return name || createdBy.email || '—'
+}
+
 export default function QuestionBank() {
-  const { grades, subjects } = useCatalog()
+  const { user, grades, subjects } = useCatalog()
 
   const [questions, setQuestions] = useState([])
   const [labels, setLabels] = useState([])
@@ -191,7 +197,8 @@ export default function QuestionBank() {
   }
 
   function openEdit(question) {
-    setDrawerMode('edit')
+    const isOwner = question.created_by?.id === user?.id
+    setDrawerMode(isOwner ? 'edit' : 'view')
     setEditingQuestion(question)
     setDrawerOpen(true)
   }
@@ -363,6 +370,9 @@ export default function QuestionBank() {
                       <th scope="col" style={{ minWidth: '8rem' }}>
                         Topics
                       </th>
+                      <th scope="col" style={{ minWidth: '7rem' }}>
+                        Created by
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
@@ -395,6 +405,11 @@ export default function QuestionBank() {
                         <td>{question.marks}</td>
                         <td className="text-muted small">
                           {topicsText(question.labels)}
+                        </td>
+                        <td>
+                          <span className="badge text-bg-light border">
+                            {createdByLabel(question.created_by)}
+                          </span>
                         </td>
                       </tr>
                     ))}

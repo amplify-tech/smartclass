@@ -1,6 +1,7 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
 from exam.models import (
@@ -12,6 +13,7 @@ from exam.models import (
     QuestionGenerationJob,
     QuestionType,
 )
+from exam.permissions import IsOwnerOrReadOnly
 from exam.serializers import (
     AddExamQuestionsSerializer,
     ExamListSerializer,
@@ -67,12 +69,19 @@ class LabelViewSet(
 
 class QuestionViewSet(viewsets.ModelViewSet):
     serializer_class = QuestionSerializer
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
 
     def get_queryset(self):
         qs = (
-            Question.objects.filter(created_by=self.request.user)
-            .select_related('grade', 'subject', 'source_document', 'generation_job')
+            Question.objects.all()
+            .select_related(
+                'grade',
+                'subject',
+                'source_document',
+                'generation_job',
+                'created_by',
+            )
             .prefetch_related('options', 'labels')
         )
 

@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 
+import { getProfile } from '../api/auth'
 import { listGrades } from '../api/grades'
 import { listSubjects } from '../api/subjects'
 import { Alert, Box, Button, Spinner } from '../components/common_ui'
@@ -7,6 +8,7 @@ import { Alert, Box, Button, Spinner } from '../components/common_ui'
 const CatalogContext = createContext(null)
 
 export function CatalogProvider({ children }) {
+  const [user, setUser] = useState(null)
   const [grades, setGrades] = useState([])
   const [subjects, setSubjects] = useState([])
   const [status, setStatus] = useState('loading')
@@ -21,12 +23,14 @@ export function CatalogProvider({ children }) {
       setError(null)
 
       try {
-        const [gradesRes, subjectsRes] = await Promise.all([
+        const [profileRes, gradesRes, subjectsRes] = await Promise.all([
+          getProfile(),
           listGrades(),
           listSubjects(),
         ])
 
         if (!cancelled) {
+          setUser(profileRes.data)
           setGrades(gradesRes.data)
           setSubjects(subjectsRes.data)
           setStatus('ready')
@@ -34,9 +38,10 @@ export function CatalogProvider({ children }) {
       } catch (err) {
         if (!cancelled) {
           const message =
+            err.response?.data?.detail ||
             err.response?.data?.error ||
             err.message ||
-            'Failed to load classes and subjects'
+            'Failed to load app data'
           setError(message)
           setStatus('error')
         }
@@ -55,7 +60,7 @@ export function CatalogProvider({ children }) {
   }
 
   if (status === 'loading') {
-    return <Spinner fullPage label="Loading classes and subjects…" />
+    return <Spinner fullPage label="Loading…" />
   }
 
   if (status === 'error') {
@@ -70,7 +75,7 @@ export function CatalogProvider({ children }) {
   }
 
   return (
-    <CatalogContext.Provider value={{ grades, subjects, reload }}>
+    <CatalogContext.Provider value={{ user, grades, subjects, reload }}>
       {children}
     </CatalogContext.Provider>
   )
