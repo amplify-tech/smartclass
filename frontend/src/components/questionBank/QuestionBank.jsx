@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
+import { addExamQuestions, getExam } from '../../api/exams'
 import { listLabels } from '../../api/labels'
 import { listQuestions } from '../../api/questions'
 import { useCatalog } from '../../contexts/CatalogContext'
@@ -48,7 +49,18 @@ function createdByLabel(createdBy) {
 }
 
 export default function QuestionBank() {
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { user, grades, subjects } = useCatalog()
+
+  const isSelectMode = searchParams.get('mode') === 'select'
+  const examId = searchParams.get('examId')
+
+  const [exam, setExam] = useState(null)
+  const [examStatus, setExamStatus] = useState(
+    isSelectMode ? 'loading' : 'ready',
+  )
+  const [examError, setExamError] = useState(null)
 
   const [questions, setQuestions] = useState([])
   const [labels, setLabels] = useState([])
@@ -68,10 +80,78 @@ export default function QuestionBank() {
   const [totalCount, setTotalCount] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
 
-  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  // id → marks (keeps selection across pages in select mode)
+  const [selectedMap, setSelectedMap] = useState(() => new Map())
+  const [submitStatus, setSubmitStatus] = useState('idle')
+  const [submitError, setSubmitError] = useState(null)
+
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerMode, setDrawerMode] = useState('create')
   const [editingQuestion, setEditingQuestion] = useState(null)
+
+  const gradeName = useMemo(() => {
+    if (!exam) return ''
+    const match = grades.find((g) => Number(g.id) === Number(exam.grade))
+    return match?.name || `Class ${exam.grade}`
+  }, [exam, grades])
+
+  const subjectName = useMemo(() => {
+    if (!exam) return ''
+    const match = subjects.find((s) => Number(s.id) === Number(exam.subject))
+    return match?.name || ''
+  }, [exam, subjects])
+
+  // Load exam when entering selection mode
+  useEffect(() => {
+    if (!isSelectMode) {
+      setExam(null)
+      setExamStatus('ready')
+      setExamError(null)
+      setSelectedMap(new Map())
+      setSubmitError(null)
+      setSubmitStatus('idle')
+      setSubjectFilter('')
+      setGradeFilter('')
+      return undefined
+    }
+
+    if (!examId) {
+      setExam(null)
+      setExamStatus('error')
+      setExamError('Missing exam id. Create an exam first.')
+      return undefined
+    }
+
+    let cancelled = false
+
+    async function loadExam() {
+      setExamStatus('loading')
+      setExamError(null)
+      try {
+        const { data } = await getExam(examId)
+        if (cancelled) return
+        setExam(data)
+        setSubjectFilter(String(data.subject ?? ''))
+        setGradeFilter(String(data.grade ?? ''))
+        setExamStatus('ready')
+      } catch (err) {
+        if (cancelled) return
+        setExam(null)
+        setExamStatus('error')
+        setExamError(
+          err.response?.data?.detail ||
+            err.response?.data?.error ||
+            err.message ||
+            'Failed to load exam',
+        )
+      }
+    }
+
+    loadExam()
+    return () => {
+      cancelled = true
+    }
+  }, [isSelectMode, examId])
 
   // Debounce search text before hitting the API
   useEffect(() => {
@@ -86,6 +166,8 @@ export default function QuestionBank() {
 
   const loadQuestions = useCallback(
     async ({ silent = false } = {}) => {
+      if (isSelectMode && examStatus !== 'ready') return
+
       if (!silent) {
         setStatus('loading')
         setError(null)
@@ -121,6 +203,8 @@ export default function QuestionBank() {
       }
     },
     [
+      isSelectMode,
+      examStatus,
       page,
       pageSize,
       search,
@@ -149,14 +233,31 @@ export default function QuestionBank() {
     loadQuestions()
   }, [loadQuestions])
 
-  // Drop selections that no longer exist on the current page
+  // In normal mode, drop selections that left the current page.
+  // In select mode, keep selections across pages.
   useEffect(() => {
-    setSelectedIds((prev) => {
+    if (isSelectMode) return
+    setSelectedMap((prev) => {
       const ids = new Set(questions.map((q) => q.id))
-      const next = new Set([...prev].filter((id) => ids.has(id)))
+      const next = new Map()
+      for (const [id, marks] of prev) {
+        if (ids.has(id)) next.set(id, marks)
+      }
       return next.size === prev.size ? prev : next
     })
-  }, [questions])
+  }, [questions, isSelectMode])
+
+  const selectedIds = useMemo(
+    () => new Set(selectedMap.keys()),
+    [selectedMap],
+  )
+
+  const selectedCount = selectedMap.size
+  const selectedMarks = useMemo(() => {
+    let total = 0
+    for (const marks of selectedMap.values()) total += Number(marks) || 0
+    return total
+  }, [selectedMap])
 
   const allVisibleSelected =
     questions.length > 0 &&
@@ -170,10 +271,10 @@ export default function QuestionBank() {
   }
 
   function toggleSelectAll(checked) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
+    setSelectedMap((prev) => {
+      const next = new Map(prev)
       if (checked) {
-        questions.forEach((question) => next.add(question.id))
+        questions.forEach((question) => next.set(question.id, question.marks))
       } else {
         questions.forEach((question) => next.delete(question.id))
       }
@@ -181,13 +282,42 @@ export default function QuestionBank() {
     })
   }
 
-  function toggleSelectOne(id, checked) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (checked) next.add(id)
-      else next.delete(id)
+  function toggleSelectOne(question, checked) {
+    setSelectedMap((prev) => {
+      const next = new Map(prev)
+      if (checked) next.set(question.id, question.marks)
+      else next.delete(question.id)
       return next
     })
+  }
+
+  function clearSelection() {
+    setSelectedMap(new Map())
+    setSubmitError(null)
+  }
+
+  async function handleAddToExam() {
+    if (!examId || selectedCount === 0) return
+
+    setSubmitStatus('submitting')
+    setSubmitError(null)
+
+    try {
+      await addExamQuestions(examId, {
+        question_ids: [...selectedMap.keys()],
+      })
+      setSubmitStatus('success')
+      navigate('/exams')
+    } catch (err) {
+      setSubmitStatus('error')
+      setSubmitError(
+        err.response?.data?.detail ||
+          err.response?.data?.error ||
+          err.response?.data?.question_ids?.[0] ||
+          err.message ||
+          'Failed to add questions to exam',
+      )
+    }
   }
 
   function openCreate() {
@@ -217,29 +347,84 @@ export default function QuestionBank() {
 
   const hasActiveFilters = Boolean(
     search ||
-      gradeFilter ||
-      subjectFilter ||
+      (!isSelectMode && gradeFilter) ||
+      (!isSelectMode && subjectFilter) ||
       topicFilter ||
       typeFilter ||
       difficultyFilter,
   )
 
-  return (
-    <Box>
-      <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
-        <h1 className="h4 mb-0">Question Bank</h1>
-        <Box className="d-flex flex-wrap gap-2">
-          <Button as={Link} to="/exams" variant="outline-secondary">
-            + Generate Questions
-          </Button>
-          <Button type="button" onClick={openCreate}>
-            + Add Question
-          </Button>
-        </Box>
+  if (isSelectMode && examStatus === 'loading') {
+    return (
+      <Box className="d-flex align-items-center gap-2 py-5 justify-content-center">
+        <Spinner label="Loading exam…" />
+        <span className="text-muted">Loading exam…</span>
       </Box>
+    )
+  }
 
-      <Card>
+  if (isSelectMode && examStatus === 'error') {
+    return (
+      <Box>
+        <Button as={Link} to="/exams" variant="link" className="px-0 mb-3">
+          ← Back to Exam List
+        </Button>
+        <Alert variant="danger" className="mb-3">
+          {examError}
+        </Alert>
+        <Button as={Link} to="/exams/create">
+          Create exam
+        </Button>
+      </Box>
+    )
+  }
+
+  return (
+    <Box className={isSelectMode ? 'pb-5 mb-4' : undefined}>
+      {isSelectMode ? (
+        <Box className="mb-4">
+          <Button
+            as={Link}
+            to="/exams"
+            variant="link"
+            className="px-0 mb-2"
+          >
+            ← Back to Exam List
+          </Button>
+          <h1 className="h4 mb-1">Select Questions</h1>
+          <p className="text-muted mb-2">
+            {[exam?.title, gradeName].filter(Boolean).join(' · ')}
+            {subjectName ? ` · ${subjectName}` : ''}
+          </p>
+          <p className="small mb-0">
+            <span className="fw-semibold">{selectedCount}</span> question
+            {selectedCount === 1 ? '' : 's'} selected
+            <span className="text-muted"> · </span>
+            <span className="fw-semibold">{selectedMarks}</span> marks
+          </p>
+        </Box>
+      ) : (
+        <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+          <h1 className="h4 mb-0">Question Bank</h1>
+          <Box className="d-flex flex-wrap gap-2">
+            <Button as={Link} to="/exams/generate" variant="outline-secondary">
+              + Generate Questions
+            </Button>
+            <Button type="button" onClick={openCreate}>
+              + Add Question
+            </Button>
+          </Box>
+        </Box>
+      )}
+
+      <Card className={isSelectMode ? 'border-primary border-opacity-25' : undefined}>
         <CardBody className="p-4">
+          {isSelectMode && (
+            <Alert variant="info" className="mb-3 py-2">
+              Selection mode — choose questions for this exam, then continue.
+            </Alert>
+          )}
+
           <Box className="mb-3">
             <Input
               type="search"
@@ -251,34 +436,38 @@ export default function QuestionBank() {
           </Box>
 
           <Box className="row g-2 mb-3">
-            <Box className="col-6 col-md">
-              <Select
-                value={subjectFilter}
-                onChange={changeFilter(setSubjectFilter)}
-                aria-label="Filter by subject"
-              >
-                <option value="">Subject</option>
-                {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
-                ))}
-              </Select>
-            </Box>
-            <Box className="col-6 col-md">
-              <Select
-                value={gradeFilter}
-                onChange={changeFilter(setGradeFilter)}
-                aria-label="Filter by class"
-              >
-                <option value="">Class</option>
-                {grades.map((grade) => (
-                  <option key={grade.id} value={grade.id}>
-                    {grade.name}
-                  </option>
-                ))}
-              </Select>
-            </Box>
+            {!isSelectMode && (
+              <>
+                <Box className="col-6 col-md">
+                  <Select
+                    value={subjectFilter}
+                    onChange={changeFilter(setSubjectFilter)}
+                    aria-label="Filter by subject"
+                  >
+                    <option value="">Subject</option>
+                    {subjects.map((subject) => (
+                      <option key={subject.id} value={subject.id}>
+                        {subject.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Box>
+                <Box className="col-6 col-md">
+                  <Select
+                    value={gradeFilter}
+                    onChange={changeFilter(setGradeFilter)}
+                    aria-label="Filter by class"
+                  >
+                    <option value="">Class</option>
+                    {grades.map((grade) => (
+                      <option key={grade.id} value={grade.id}>
+                        {grade.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Box>
+              </>
+            )}
             <Box className="col-6 col-md">
               <Select
                 value={topicFilter}
@@ -341,7 +530,9 @@ export default function QuestionBank() {
             <p className="text-muted text-center py-5 mb-0">
               {hasActiveFilters
                 ? 'No questions match your search or filters.'
-                : 'No questions yet. Add one or generate from Exam.'}
+                : isSelectMode
+                  ? 'No questions available for this exam class and subject.'
+                  : 'No questions yet. Add one or generate from Exam.'}
             </p>
           )}
 
@@ -370,33 +561,44 @@ export default function QuestionBank() {
                       <th scope="col" style={{ minWidth: '8rem' }}>
                         Topics
                       </th>
-                      <th scope="col" style={{ minWidth: '7rem' }}>
-                        Created by
-                      </th>
+                      {!isSelectMode && (
+                        <th scope="col" style={{ minWidth: '7rem' }}>
+                          Created by
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
                     {questions.map((question) => (
-                      <tr key={question.id}>
+                      <tr
+                        key={question.id}
+                        className={
+                          selectedIds.has(question.id) ? 'table-active' : undefined
+                        }
+                      >
                         <td>
                           <input
                             className="form-check-input"
                             type="checkbox"
                             checked={selectedIds.has(question.id)}
                             onChange={(e) =>
-                              toggleSelectOne(question.id, e.target.checked)
+                              toggleSelectOne(question, e.target.checked)
                             }
                             aria-label={`Select question ${question.id}`}
                           />
                         </td>
                         <td>
-                          <button
-                            type="button"
-                            className="btn btn-link link-dark text-start text-decoration-none p-0"
-                            onClick={() => openEdit(question)}
-                          >
-                            {truncate(question.text)}
-                          </button>
+                          {isSelectMode ? (
+                            truncate(question.text)
+                          ) : (
+                            <button
+                              type="button"
+                              className="btn btn-link link-dark text-start text-decoration-none p-0"
+                              onClick={() => openEdit(question)}
+                            >
+                              {truncate(question.text)}
+                            </button>
+                          )}
                         </td>
                         <td>
                           {TYPE_LABELS[question.question_type] ||
@@ -406,11 +608,13 @@ export default function QuestionBank() {
                         <td className="text-muted small">
                           {topicsText(question.labels)}
                         </td>
-                        <td>
-                          <span className="badge text-bg-light border">
-                            {createdByLabel(question.created_by)}
-                          </span>
-                        </td>
+                        {!isSelectMode && (
+                          <td>
+                            <span className="badge text-bg-light border">
+                              {createdByLabel(question.created_by)}
+                            </span>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -430,15 +634,55 @@ export default function QuestionBank() {
         </CardBody>
       </Card>
 
-      <QuestionFormDrawer
-        open={drawerOpen}
-        mode={drawerMode}
-        question={editingQuestion}
-        labels={labels}
-        onClose={() => setDrawerOpen(false)}
-        onSaved={handleSaved}
-        onLabelsChange={handleLabelCreated}
-      />
+      {isSelectMode && (
+        <Box
+          className="position-fixed bottom-0 end-0 border-top bg-white shadow-sm"
+          style={{ zIndex: 1030, left: 220 }}
+        >
+          <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 px-4 py-3">
+            <Box>
+              <span className="fw-semibold">{selectedCount}</span> question
+              {selectedCount === 1 ? '' : 's'} selected
+              <span className="text-muted mx-2">·</span>
+              Total marks: <span className="fw-semibold">{selectedMarks}</span>
+              {submitError && (
+                <Alert variant="danger" className="mb-0 mt-2 py-1 px-2 small">
+                  {submitError}
+                </Alert>
+              )}
+            </Box>
+            <Box className="d-flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline-secondary"
+                disabled={selectedCount === 0 || submitStatus === 'submitting'}
+                onClick={clearSelection}
+              >
+                Clear Selection
+              </Button>
+              <Button
+                type="button"
+                disabled={selectedCount === 0 || submitStatus === 'submitting'}
+                onClick={handleAddToExam}
+              >
+                {submitStatus === 'submitting' ? 'Adding…' : 'Continue →'}
+              </Button>
+            </Box>
+          </Box>
+        </Box>
+      )}
+
+      {!isSelectMode && (
+        <QuestionFormDrawer
+          open={drawerOpen}
+          mode={drawerMode}
+          question={editingQuestion}
+          labels={labels}
+          onClose={() => setDrawerOpen(false)}
+          onSaved={handleSaved}
+          onLabelsChange={handleLabelCreated}
+        />
+      )}
     </Box>
   )
 }

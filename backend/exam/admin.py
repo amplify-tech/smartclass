@@ -78,6 +78,7 @@ class ExamAdmin(admin.ModelAdmin):
         'grade',
         'subject',
         'difficulty',
+        'question_count',
         'total_marks',
         'status',
         'created_by',
@@ -87,6 +88,7 @@ class ExamAdmin(admin.ModelAdmin):
     search_fields = ('title',)
     raw_id_fields = ('created_by',)
     inlines = (ExamQuestionInline,)
+    readonly_fields = ('question_count', 'total_marks')
 
 
 @admin.register(ExamQuestion)

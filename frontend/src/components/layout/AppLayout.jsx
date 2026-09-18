@@ -6,8 +6,15 @@ import { Box, Button, Navbar, Sidebar } from '../common_ui'
 
 const SIDEBAR_ITEMS = [
   { to: '/', label: 'Home', end: true },
-  { to: '/question-bank', label: 'Question Bank' },
-  { to: '/exams', label: 'Exam' },
+  {
+    label: 'Exam',
+    children: [
+      { to: '/exams', label: 'Exam List', end: true },
+      { to: '/exams/question-bank', label: 'Question Bank' },
+      { to: '/exams/generate', label: 'Generate Questions' },
+      { to: '/exams/pending-tasks', label: 'Pending Tasks' },
+    ],
+  },
   { to: '/documents', label: 'Document' },
   { to: '/ppts', label: 'PPT' },
 ]

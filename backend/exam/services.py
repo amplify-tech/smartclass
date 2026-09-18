@@ -1,17 +1,140 @@
-"""Orchestration for AI question generation."""
+"""Orchestration for AI question generation and exam assembly."""
 import logging
 
 from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
 from document.models import Document
 from exam.llm import get_llm_provider
-from exam.models import Option, Question, QuestionGenerationJob, QuestionType
+from exam.models import (
+    ExamQuestion,
+    Option,
+    Question,
+    QuestionGenerationJob,
+    QuestionType,
+)
 from exam.utils.llm_json import parse_questions
 from exam.utils.prompts import SYSTEM_PROMPT, build_user_prompt
 
 logger = logging.getLogger(__name__)
+
+
+class ExamService:
+    """Assemble and maintain exam question placements."""
+
+    @transaction.atomic
+    def add_questions(self, exam, question_ids):
+        ordered_ids = list(dict.fromkeys(question_ids))
+        questions = {
+            q.id: q
+            for q in Question.objects.filter(pk__in=ordered_ids)
+        }
+        missing = [qid for qid in ordered_ids if qid not in questions]
+        if missing:
+            raise ValidationError(
+                {'question_ids': f'invalid ids: {sorted(missing)}'},
+            )
+
+        mismatched = [
+            qid
+            for qid in ordered_ids
+            if questions[qid].grade_id != exam.grade_id
+            or questions[qid].subject_id != exam.subject_id
+        ]
+        if mismatched:
+            raise ValidationError(
+                {
+                    'question_ids': (
+                        'questions must match exam grade and subject: '
+                        f'{sorted(mismatched)}'
+                    ),
+                },
+            )
+
+        existing = set(
+            ExamQuestion.objects.filter(
+                exam=exam,
+                question_id__in=ordered_ids,
+            ).values_list('question_id', flat=True),
+        )
+        next_order = (
+            ExamQuestion.objects.filter(exam=exam).aggregate(m=Max('order'))['m']
+            or 0
+        )
+
+        to_create = []
+        for qid in ordered_ids:
+            if qid in existing:
+                continue
+            question = questions[qid]
+            next_order += 1
+            to_create.append(
+                ExamQuestion(
+                    exam=exam,
+                    question=question,
+                    order=next_order,
+                    marks=question.marks,
+                ),
+            )
+
+        if to_create:
+            ExamQuestion.objects.bulk_create(to_create)
+            exam.refresh_totals()
+            logger.info(
+                'exam %s added %s questions count=%s marks=%s',
+                exam.id,
+                len(to_create),
+                exam.question_count,
+                exam.total_marks,
+            )
+
+        return exam
+
+    @transaction.atomic
+    def reorder_questions(self, exam, items):
+        placements = {
+            eq.id: eq
+            for eq in ExamQuestion.objects.filter(exam=exam).select_for_update()
+        }
+        missing = [
+            item['exam_question_id']
+            for item in items
+            if item['exam_question_id'] not in placements
+        ]
+        if missing:
+            raise ValidationError(
+                {'items': f'invalid exam_question_id: {sorted(missing)}'},
+            )
+
+        orders = [item['order'] for item in items]
+        if len(orders) != len(set(orders)):
+            raise ValidationError({'items': 'duplicate order values'})
+
+        proposed = {eq_id: eq.order for eq_id, eq in placements.items()}
+        for item in items:
+            proposed[item['exam_question_id']] = item['order']
+        if len(proposed) != len(set(proposed.values())):
+            raise ValidationError(
+                {'items': 'order values collide with existing placements'},
+            )
+
+        # Two-phase update avoids unique (exam, order) collisions mid-swap.
+        offset = (max(proposed.values()) if proposed else 0) + len(items) + 1
+        for index, item in enumerate(items):
+            placement = placements[item['exam_question_id']]
+            placement.order = offset + index
+            placement.save(update_fields=['order'])
+
+        for item in items:
+            placement = placements[item['exam_question_id']]
+            placement.order = item['order']
+            placement.save(update_fields=['order'])
+
+        logger.info('exam %s reordered %s questions', exam.id, len(items))
+        return exam
+
 
 
 class QuestionGenerationService:

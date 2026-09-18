@@ -1,13 +1,16 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
 
 import GuestOnly from './components/auth/GuestOnly'
 import RequireAuth from './components/auth/RequireAuth'
 import AppLayout from './components/layout/AppLayout'
 import { CatalogProvider } from './contexts/CatalogContext'
 import AuthPage from './pages/AuthPage'
+import CreateExamPage from './pages/CreateExamPage'
 import DocumentsPage from './pages/DocumentsPage'
 import ExamsPage from './pages/ExamsPage'
+import GenerateQuestionsPage from './pages/GenerateQuestionsPage'
 import HomePage from './pages/HomePage'
+import PendingTasksPage from './pages/PendingTasksPage'
 import PptsPage from './pages/PptsPage'
 import QuestionBankPage from './pages/QuestionBankPage'
 import { isAuthenticated } from './utils/authTokens'
@@ -15,6 +18,11 @@ import { isAuthenticated } from './utils/authTokens'
 function CatchAllRedirect() {
   window.location.replace(isAuthenticated() ? '/' : '/auth')
   return null
+}
+
+function LegacyRedirect({ to }) {
+  const { search } = useLocation()
+  return <Navigate to={`${to}${search}`} replace />
 }
 
 function App() {
@@ -34,8 +42,23 @@ function App() {
             }
           >
             <Route path="/" element={<HomePage />} />
-            <Route path="/question-bank" element={<QuestionBankPage />} />
+
             <Route path="/exams" element={<ExamsPage />} />
+            <Route path="/exams/question-bank" element={<QuestionBankPage />} />
+            <Route path="/exams/generate" element={<GenerateQuestionsPage />} />
+            <Route path="/exams/pending-tasks" element={<PendingTasksPage />} />
+            <Route path="/exams/create" element={<CreateExamPage />} />
+
+            {/* Legacy redirects */}
+            <Route
+              path="/question-bank"
+              element={<LegacyRedirect to="/exams/question-bank" />}
+            />
+            <Route
+              path="/create-exam"
+              element={<LegacyRedirect to="/exams/create" />}
+            />
+
             <Route path="/documents" element={<DocumentsPage />} />
             <Route path="/ppts" element={<PptsPage />} />
           </Route>

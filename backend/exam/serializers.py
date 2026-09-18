@@ -175,12 +175,19 @@ class ExamSerializer(serializers.ModelSerializer):
             'subject',
             'difficulty',
             'total_marks',
+            'question_count',
             'status',
             'exam_questions',
             'created_at',
             'updated_at',
         )
-        read_only_fields = ('id', 'total_marks', 'created_at', 'updated_at')
+        read_only_fields = (
+            'id',
+            'total_marks',
+            'question_count',
+            'created_at',
+            'updated_at',
+        )
 
 
 class ExamListSerializer(serializers.ModelSerializer):
@@ -193,7 +200,15 @@ class ExamListSerializer(serializers.ModelSerializer):
             'subject',
             'difficulty',
             'total_marks',
+            'question_count',
             'status',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = (
+            'id',
+            'total_marks',
+            'question_count',
             'created_at',
             'updated_at',
         )

@@ -200,7 +200,9 @@ class Exam(models.Model):
         choices=Difficulty.choices,
         blank=True,
     )
+    # Cached aggregates — updated when placements change; never user input.
     total_marks = models.PositiveSmallIntegerField(default=0)
+    question_count = models.PositiveSmallIntegerField(default=0)
     status = models.CharField(
         max_length=16,
         choices=Status.choices,
@@ -217,6 +219,18 @@ class Exam(models.Model):
     class Meta:
         db_table = 'exams'
         ordering = ['-created_at']
+
+    def refresh_totals(self, *, save=True):
+        """Recompute cached total_marks and question_count from placements."""
+        aggregates = self.exam_questions.aggregate(
+            marks=models.Sum('marks'),
+            count=models.Count('id'),
+        )
+        self.total_marks = aggregates['marks'] or 0
+        self.question_count = aggregates['count'] or 0
+        if save:
+            self.save(update_fields=['total_marks', 'question_count', 'updated_at'])
+        return self.total_marks, self.question_count
 
     def __str__(self):
         return self.title

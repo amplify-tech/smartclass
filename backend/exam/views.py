@@ -24,7 +24,7 @@ from exam.serializers import (
     ReorderExamQuestionsSerializer,
     UpdateExamQuestionSerializer,
 )
-from exam.services import QuestionGenerationService
+from exam.services import ExamService, QuestionGenerationService
 
 
 class QuestionGenerationJobViewSet(
@@ -134,7 +134,12 @@ class ExamViewSet(viewsets.ModelViewSet):
             'grade',
             'subject',
         )
-        if self.action == 'retrieve':
+        if self.action in (
+            'retrieve',
+            'add_questions',
+            'reorder_questions',
+            'exam_question_detail',
+        ):
             qs = qs.prefetch_related(
                 'exam_questions__question__options',
                 'exam_questions__question__labels',
@@ -144,21 +149,25 @@ class ExamViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    def _serialized_exam(self, exam):
+        exam = self.get_queryset().get(pk=exam.pk)
+        return ExamSerializer(exam).data
+
     @action(detail=True, methods=['post'], url_path='questions')
     def add_questions(self, request, pk=None):
         exam = self.get_object()
         serializer = AddExamQuestionsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # TODO: create ExamQuestion rows for validated question_ids
-        return Response(ExamSerializer(exam).data)
+        ExamService().add_questions(exam, serializer.validated_data['question_ids'])
+        return Response(self._serialized_exam(exam))
 
     @action(detail=True, methods=['put'], url_path='reorder-questions')
     def reorder_questions(self, request, pk=None):
         exam = self.get_object()
         serializer = ReorderExamQuestionsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # TODO: update order for each item
-        return Response(ExamSerializer(exam).data)
+        ExamService().reorder_questions(exam, serializer.validated_data['items'])
+        return Response(self._serialized_exam(exam))
 
     @action(
         detail=True,
@@ -171,11 +180,14 @@ class ExamViewSet(viewsets.ModelViewSet):
 
         if request.method == 'DELETE':
             placement.delete()
-            return Response(ExamSerializer(exam).data)
+            exam.refresh_totals()
+            return Response(self._serialized_exam(exam))
 
         serializer = UpdateExamQuestionSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         for key, value in serializer.validated_data.items():
             setattr(placement, key, value)
         placement.save()
-        return Response(ExamSerializer(exam).data)
+        if 'marks' in serializer.validated_data:
+            exam.refresh_totals()
+        return Response(self._serialized_exam(exam))
