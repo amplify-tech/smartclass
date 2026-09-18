@@ -3,16 +3,13 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { listGrades } from '../api/grades'
 import { listSubjects } from '../api/subjects'
 import { Alert, Box, Button, Spinner } from '../components/common_ui'
-import { isAuthenticated } from '../utils/authTokens'
 
 const CatalogContext = createContext(null)
 
 export function CatalogProvider({ children }) {
   const [grades, setGrades] = useState([])
   const [subjects, setSubjects] = useState([])
-  const [status, setStatus] = useState(() =>
-    isAuthenticated() ? 'loading' : 'ready',
-  )
+  const [status, setStatus] = useState('loading')
   const [error, setError] = useState(null)
   const [reloadToken, setReloadToken] = useState(0)
 
@@ -20,16 +17,6 @@ export function CatalogProvider({ children }) {
     let cancelled = false
 
     async function fetchCatalog() {
-      if (!isAuthenticated()) {
-        if (!cancelled) {
-          setGrades([])
-          setSubjects([])
-          setStatus('ready')
-          setError(null)
-        }
-        return
-      }
-
       setStatus('loading')
       setError(null)
 

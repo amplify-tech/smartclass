@@ -53,7 +53,7 @@ export default function RegisterForm() {
         password: values.password,
       })
       setTokens(data)
-      window.location.assign('/')
+      window.location.replace('/')
     } catch (error) {
       applyApiErrors(error, setError)
     }

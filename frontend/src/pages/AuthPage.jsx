@@ -9,14 +9,8 @@ import {
   TabPane,
   Tabs,
 } from '../components/common_ui'
-import { isAuthenticated } from '../utils/authTokens'
 
 export default function AuthPage() {
-  if (isAuthenticated()) {
-    window.location.replace('/')
-    return null
-  }
-
   return (
     <Box className="container py-5">
       <Box className="row justify-content-center">
