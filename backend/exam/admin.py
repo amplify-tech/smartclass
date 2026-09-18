@@ -3,6 +3,7 @@ from django.contrib import admin
 from .models import (
     Exam,
     ExamQuestion,
+    Label,
     Option,
     Question,
     QuestionGenerationJob,
@@ -20,6 +21,12 @@ class ExamQuestionInline(admin.TabularInline):
     extra = 0
     fields = ('order', 'question', 'marks')
     raw_id_fields = ('question',)
+
+
+@admin.register(Label)
+class LabelAdmin(admin.ModelAdmin):
+    list_display = ('id', 'name')
+    search_fields = ('name',)
 
 
 @admin.register(QuestionGenerationJob)
@@ -50,9 +57,10 @@ class QuestionAdmin(admin.ModelAdmin):
         'created_by',
         'created_at',
     )
-    list_filter = ('question_type', 'difficulty', 'grade', 'subject')
+    list_filter = ('question_type', 'difficulty', 'grade', 'subject', 'labels')
     search_fields = ('text',)
     raw_id_fields = ('created_by', 'source_document', 'generation_job')
+    filter_horizontal = ('labels',)
     inlines = (OptionInline,)
 
 

@@ -3,11 +3,12 @@ from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from exam.models import Exam, ExamQuestion, Question, QuestionGenerationJob
+from exam.models import Exam, ExamQuestion, Label, Question, QuestionGenerationJob
 from exam.serializers import (
     AddExamQuestionsSerializer,
     ExamListSerializer,
     ExamSerializer,
+    LabelSerializer,
     QuestionGenerationJobSerializer,
     QuestionSerializer,
     ReorderExamQuestionsSerializer,
@@ -43,16 +44,42 @@ class QuestionGenerationJobViewSet(
         )
 
 
+class LabelViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    viewsets.GenericViewSet,
+):
+    queryset = Label.objects.all()
+    serializer_class = LabelSerializer
+    http_method_names = ['get', 'post', 'head', 'options']
+
+
 class QuestionViewSet(viewsets.ModelViewSet):
     serializer_class = QuestionSerializer
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
 
     def get_queryset(self):
-        return (
+        qs = (
             Question.objects.filter(created_by=self.request.user)
             .select_related('grade', 'subject', 'source_document', 'generation_job')
-            .prefetch_related('options')
+            .prefetch_related('options', 'labels')
         )
+
+        params = self.request.query_params
+        grade = params.get('grade')
+        if grade is not None:
+            qs = qs.filter(grade_id=grade)
+
+        subject = params.get('subject')
+        if subject is not None:
+            qs = qs.filter(subject_id=subject)
+
+        label_ids = params.getlist('label')
+        if label_ids:
+            qs = qs.filter(labels__in=label_ids).distinct()
+
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
@@ -72,7 +99,10 @@ class ExamViewSet(viewsets.ModelViewSet):
             'subject',
         )
         if self.action == 'retrieve':
-            qs = qs.prefetch_related('exam_questions__question__options')
+            qs = qs.prefetch_related(
+                'exam_questions__question__options',
+                'exam_questions__question__labels',
+            )
         return qs
 
     def perform_create(self, serializer):

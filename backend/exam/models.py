@@ -75,6 +75,19 @@ class QuestionGenerationJob(models.Model):
         return f'Job {self.pk} ({self.status})'
 
 
+class Label(models.Model):
+    """Topic tag for bank questions, e.g. optics, electricity."""
+
+    name = models.CharField(max_length=64, unique=True)
+
+    class Meta:
+        db_table = 'question_labels'
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
+
 class Question(models.Model):
     """Reusable question-bank entry."""
 
@@ -90,6 +103,11 @@ class Question(models.Model):
     subject = models.ForeignKey(
         Subject,
         on_delete=models.PROTECT,
+        related_name='questions',
+    )
+    labels = models.ManyToManyField(
+        Label,
+        blank=True,
         related_name='questions',
     )
     correct_answer = models.TextField(
@@ -121,6 +139,12 @@ class Question(models.Model):
     class Meta:
         db_table = 'questions'
         ordering = ['-created_at']
+        indexes = [
+            models.Index(
+                fields=['grade', 'subject'],
+                name='idx_question_grade_subject',
+            ),
+        ]
 
     def __str__(self):
         return self.text[:80]

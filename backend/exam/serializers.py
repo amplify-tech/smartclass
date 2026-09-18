@@ -3,11 +3,19 @@ from rest_framework import serializers
 from exam.models import (
     Exam,
     ExamQuestion,
+    Label,
     Option,
     Question,
     QuestionGenerationJob,
     QuestionType,
 )
+
+
+class LabelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Label
+        fields = ('id', 'name')
+        read_only_fields = ('id',)
 
 
 class OptionSerializer(serializers.ModelSerializer):
@@ -18,6 +26,14 @@ class OptionSerializer(serializers.ModelSerializer):
 
 class QuestionSerializer(serializers.ModelSerializer):
     options = OptionSerializer(many=True, required=False)
+    labels = LabelSerializer(many=True, read_only=True)
+    label_ids = serializers.PrimaryKeyRelatedField(
+        source='labels',
+        many=True,
+        queryset=Label.objects.all(),
+        write_only=True,
+        required=False,
+    )
 
     class Meta:
         model = Question
@@ -29,6 +45,8 @@ class QuestionSerializer(serializers.ModelSerializer):
             'marks',
             'grade',
             'subject',
+            'labels',
+            'label_ids',
             'correct_answer',
             'source_document',
             'generation_job',
@@ -46,13 +64,20 @@ class QuestionSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data.pop('options', None)  # TODO: create Option rows for MCQ
-        return Question.objects.create(**validated_data)
+        labels = validated_data.pop('labels', None)
+        question = Question.objects.create(**validated_data)
+        if labels is not None:
+            question.labels.set(labels)
+        return question
 
     def update(self, instance, validated_data):
         validated_data.pop('options', None)  # TODO: sync Option rows
+        labels = validated_data.pop('labels', None)
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+        if labels is not None:
+            instance.labels.set(labels)
         return instance
 
 
