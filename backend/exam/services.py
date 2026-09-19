@@ -10,6 +10,7 @@ from document.models import Document
 from exam.llm import get_llm_provider
 from exam.models import (
     ExamQuestion,
+    Label,
     Option,
     Question,
     QuestionGenerationJob,
@@ -207,6 +208,7 @@ class QuestionGenerationService:
 
         for item in items:
             options = item.pop('options', [])
+            label_names = item.pop('labels', []) or []
             question = Question.objects.create(
                 question_type=item['question_type'],
                 text=item['text'],
@@ -218,13 +220,25 @@ class QuestionGenerationService:
                 generation_job=job,
                 created_by=job.created_by,
             )
+            if label_names:
+                question.labels.set(self._resolve_labels(label_names))
             if question.question_type == QuestionType.MCQ:
                 Option.objects.bulk_create([
                     Option(
                         question=question,
                         text=opt['text'],
                         is_correct=opt['is_correct'],
-                        order=opt['order'],
+                        order=index,
                     )
-                    for opt in options
+                    for index, opt in enumerate(options, start=1)
                 ])
+
+    @staticmethod
+    def _resolve_labels(names: list[str]) -> list[Label]:
+        labels = []
+        for name in names:
+            label = Label.objects.filter(name__iexact=name).first()
+            if label is None:
+                label = Label.objects.create(name=name)
+            labels.append(label)
+        return labels

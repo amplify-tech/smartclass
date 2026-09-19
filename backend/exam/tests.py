@@ -27,10 +27,10 @@ class QuestionSerializerOptionTests(TestCase):
             'subject': self.subject.id,
             'correct_answer': 'A',
             'options': [
-                {'text': 'Bouncing of light', 'is_correct': True, 'order': 1},
-                {'text': 'Bending of light', 'is_correct': False, 'order': 2},
-                {'text': 'Absorption of light', 'is_correct': False, 'order': 3},
-                {'text': 'Emission of light', 'is_correct': False, 'order': 4},
+                {'text': 'Bouncing of light', 'is_correct': True},
+                {'text': 'Bending of light', 'is_correct': False},
+                {'text': 'Absorption of light', 'is_correct': False},
+                {'text': 'Emission of light', 'is_correct': False},
             ],
         }
         data.update(overrides)
@@ -44,6 +44,7 @@ class QuestionSerializerOptionTests(TestCase):
         options = list(question.options.order_by('order'))
         self.assertEqual(len(options), 4)
         self.assertEqual(options[0].text, 'Bouncing of light')
+        self.assertEqual([o.order for o in options], [1, 2, 3, 4])
         self.assertTrue(options[0].is_correct)
         self.assertEqual(sum(1 for o in options if o.is_correct), 1)
 
@@ -73,8 +74,8 @@ class QuestionSerializerOptionTests(TestCase):
             question,
             data={
                 'options': [
-                    {'text': 'New A', 'is_correct': False, 'order': 1},
-                    {'text': 'New B', 'is_correct': True, 'order': 2},
+                    {'text': 'New A', 'is_correct': False},
+                    {'text': 'New B', 'is_correct': True},
                 ],
             },
             partial=True,

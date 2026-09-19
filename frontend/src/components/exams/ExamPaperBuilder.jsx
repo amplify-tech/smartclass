@@ -23,7 +23,7 @@ const TYPE_LABELS = {
   long: 'Long Answer',
 }
 
-function topicsText(labels) {
+function labelsText(labels) {
   if (!labels?.length) return null
   return labels.map((label) => label.name).join(', ')
 }
@@ -233,7 +233,7 @@ export default function ExamPaperBuilder({ examId }) {
             >
               {placements.map((placement, index) => {
                 const question = placement.question || {}
-                const topics = topicsText(question.labels)
+                const labelNames = labelsText(question.labels)
                 const typeLabel =
                   TYPE_LABELS[question.question_type] ||
                   question.question_type ||
@@ -262,10 +262,10 @@ export default function ExamPaperBuilder({ examId }) {
                             {typeLabel}
                             <span className="mx-1">·</span>
                             {marksLabel}
-                            {topics ? (
+                            {labelNames ? (
                               <>
                                 <span className="mx-1">·</span>
-                                {topics}
+                                {labelNames}
                               </>
                             ) : null}
                           </p>

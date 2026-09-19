@@ -23,18 +23,13 @@ class OptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Option
         fields = ('id', 'text', 'is_correct', 'order')
-        read_only_fields = ('id',)
+        read_only_fields = ('id', 'order')
 
     def validate_text(self, value):
         text = (value or '').strip()
         if not text:
             raise serializers.ValidationError('Option text is required.')
         return text
-
-    def validate_order(self, value):
-        if value is None or value < 1:
-            raise serializers.ValidationError('Order must be at least 1.')
-        return value
 
 
 class QuestionCreatedBySerializer(serializers.Serializer):
@@ -124,12 +119,6 @@ class QuestionSerializer(serializers.ModelSerializer):
                 {'options': 'At most six options are allowed.'},
             )
 
-        orders = [opt['order'] for opt in options]
-        if len(orders) != len(set(orders)):
-            raise serializers.ValidationError(
-                {'options': 'Option order values must be unique.'},
-            )
-
         correct_count = sum(1 for opt in options if opt.get('is_correct'))
         if correct_count != 1:
             raise serializers.ValidationError(
@@ -147,9 +136,9 @@ class QuestionSerializer(serializers.ModelSerializer):
                     question=question,
                     text=opt['text'],
                     is_correct=bool(opt.get('is_correct', False)),
-                    order=opt['order'],
+                    order=index,
                 )
-                for opt in options
+                for index, opt in enumerate(options, start=1)
             ],
         )
 

@@ -164,9 +164,9 @@ export default function QuestionFormDrawer({
   onLabelsChange,
 }) {
   const { grades, subjects } = useCatalog()
-  const [newTopic, setNewTopic] = useState('')
-  const [topicError, setTopicError] = useState(null)
-  const [addingTopic, setAddingTopic] = useState(false)
+  const [newLabelName, setNewLabelName] = useState('')
+  const [labelError, setLabelError] = useState(null)
+  const [addingLabel, setAddingLabel] = useState(false)
   const readOnly = mode === 'view'
 
   const {
@@ -185,8 +185,8 @@ export default function QuestionFormDrawer({
 
   useEffect(() => {
     if (!open) return
-    setNewTopic('')
-    setTopicError(null)
+    setNewLabelName('')
+    setLabelError(null)
     if ((mode === 'edit' || mode === 'view') && question) {
       reset(questionToFormValues(question))
     } else {
@@ -208,10 +208,10 @@ export default function QuestionFormDrawer({
     }
   }
 
-  async function handleAddTopic() {
-    const name = newTopic.trim()
+  async function handleAddLabel() {
+    const name = newLabelName.trim()
     if (!name) {
-      setTopicError('Enter a topic name')
+      setLabelError('Enter a topic name')
       return
     }
 
@@ -219,17 +219,17 @@ export default function QuestionFormDrawer({
       (label) => label.name.toLowerCase() === name.toLowerCase(),
     )
     if (existing) {
-      setNewTopic('')
-      setTopicError(null)
+      setNewLabelName('')
+      setLabelError(null)
       return existing
     }
 
-    setAddingTopic(true)
-    setTopicError(null)
+    setAddingLabel(true)
+    setLabelError(null)
     try {
       const { data } = await createLabel({ name })
       onLabelsChange?.(data)
-      setNewTopic('')
+      setNewLabelName('')
       return data
     } catch (err) {
       const message =
@@ -237,10 +237,10 @@ export default function QuestionFormDrawer({
         err.response?.data?.error ||
         err.message ||
         'Could not create topic'
-      setTopicError(message)
+      setLabelError(message)
       return null
     } finally {
-      setAddingTopic(false)
+      setAddingLabel(false)
     }
   }
 
@@ -473,12 +473,12 @@ export default function QuestionFormDrawer({
                       <Box className="d-flex gap-2 mt-2">
                         <Input
                           placeholder="New topic"
-                          value={newTopic}
-                          onChange={(e) => setNewTopic(e.target.value)}
+                          value={newLabelName}
+                          onChange={(e) => setNewLabelName(e.target.value)}
                           onKeyDown={async (e) => {
                             if (e.key !== 'Enter') return
                             e.preventDefault()
-                            const created = await handleAddTopic()
+                            const created = await handleAddLabel()
                             if (created && !field.value.includes(created.id)) {
                               field.onChange([...field.value, created.id])
                             }
@@ -487,9 +487,9 @@ export default function QuestionFormDrawer({
                         <Button
                           type="button"
                           variant="outline-secondary"
-                          disabled={addingTopic}
+                          disabled={addingLabel}
                           onClick={async () => {
-                            const created = await handleAddTopic()
+                            const created = await handleAddLabel()
                             if (created && !field.value.includes(created.id)) {
                               field.onChange([...field.value, created.id])
                             }
@@ -498,8 +498,8 @@ export default function QuestionFormDrawer({
                           + Add
                         </Button>
                       </Box>
-                      {topicError && (
-                        <div className="invalid-feedback d-block">{topicError}</div>
+                      {labelError && (
+                        <div className="invalid-feedback d-block">{labelError}</div>
                       )}
                     </>
                   )}

@@ -39,7 +39,7 @@ function truncate(text, max = 80) {
   return `${value.slice(0, max - 1)}…`
 }
 
-function topicsText(labels) {
+function labelsText(labels) {
   if (!labels?.length) return '—'
   return labels.map((label) => label.name).join(', ')
 }
@@ -79,7 +79,7 @@ export default function QuestionBank() {
   const [search, setSearch] = useState('')
   const [subjectFilter, setSubjectFilter] = useState('')
   const [gradeFilter, setGradeFilter] = useState('')
-  const [topicFilter, setTopicFilter] = useState('')
+  const [labelFilter, setLabelFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [difficultyFilter, setDifficultyFilter] = useState('')
 
@@ -259,7 +259,7 @@ export default function QuestionBank() {
         search,
         grade: gradeFilter,
         subject: subjectFilter,
-        label: topicFilter,
+        label: labelFilter,
         question_type: typeFilter,
         difficulty: difficultyFilter,
         generation_job: jobId || undefined,
@@ -294,7 +294,7 @@ export default function QuestionBank() {
       search,
       gradeFilter,
       subjectFilter,
-      topicFilter,
+      labelFilter,
       typeFilter,
       difficultyFilter,
     ],
@@ -444,7 +444,7 @@ export default function QuestionBank() {
     search ||
       (!isSelectMode && gradeFilter) ||
       (!isSelectMode && subjectFilter) ||
-      topicFilter ||
+      labelFilter ||
       typeFilter ||
       difficultyFilter ||
       jobId,
@@ -609,8 +609,8 @@ export default function QuestionBank() {
             )}
             <Box className="col-6 col-md">
               <Select
-                value={topicFilter}
-                onChange={changeFilter(setTopicFilter)}
+                value={labelFilter}
+                onChange={changeFilter(setLabelFilter)}
                 aria-label="Filter by topic"
                 disabled={filtersDisabled}
               >
@@ -770,7 +770,7 @@ export default function QuestionBank() {
                           </td>
                           <td>{question.marks}</td>
                           <td className="text-muted small">
-                            {topicsText(question.labels)}
+                            {labelsText(question.labels)}
                           </td>
                           {!isSelectMode && (
                             <td>
