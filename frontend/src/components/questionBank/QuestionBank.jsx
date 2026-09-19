@@ -44,16 +44,10 @@ function labelsText(labels) {
   return labels.map((label) => label.name).join(', ')
 }
 
-function createdByLabel(createdBy) {
-  if (!createdBy) return '—'
-  const name = String(createdBy.first_name || '').trim()
-  return name || createdBy.email || '—'
-}
-
 export default function QuestionBank() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const { user, grades, subjects } = useCatalog()
+  const { grades, subjects } = useCatalog()
 
   const isSelectMode = searchParams.get('mode') === 'select'
   const examId = searchParams.get('examId')
@@ -422,8 +416,7 @@ export default function QuestionBank() {
   }
 
   function openEdit(question) {
-    const isOwner = question.created_by?.id === user?.id
-    setDrawerMode(isOwner ? 'edit' : 'view')
+    setDrawerMode('edit')
     setEditingQuestion(question)
     setDrawerOpen(true)
   }
@@ -504,7 +497,7 @@ export default function QuestionBank() {
   }
 
   const filtersDisabled = isGenerating
-  const tableColSpan = isSelectMode ? 5 : 6
+  const tableColSpan = 5
   const showTable =
     isGenerating ||
     status === 'loading' ||
@@ -699,11 +692,6 @@ export default function QuestionBank() {
                       <th scope="col" style={{ minWidth: '8rem' }}>
                         Topics
                       </th>
-                      {!isSelectMode && (
-                        <th scope="col" style={{ minWidth: '7rem' }}>
-                          Created by
-                        </th>
-                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -772,13 +760,6 @@ export default function QuestionBank() {
                           <td className="text-muted small">
                             {labelsText(question.labels)}
                           </td>
-                          {!isSelectMode && (
-                            <td>
-                              <span className="badge text-bg-light border">
-                                {createdByLabel(question.created_by)}
-                              </span>
-                            </td>
-                          )}
                         </tr>
                       ))
                     )}

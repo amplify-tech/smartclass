@@ -32,16 +32,10 @@ class OptionSerializer(serializers.ModelSerializer):
         return text
 
 
-class QuestionCreatedBySerializer(serializers.Serializer):
-    id = serializers.IntegerField()
-    email = serializers.EmailField()
-    first_name = serializers.CharField()
-
-
 class QuestionSerializer(serializers.ModelSerializer):
     options = OptionSerializer(many=True, required=False)
     labels = LabelSerializer(many=True, read_only=True)
-    created_by = QuestionCreatedBySerializer(read_only=True)
+    created_by_id = serializers.IntegerField(read_only=True)
     label_ids = serializers.PrimaryKeyRelatedField(
         source='labels',
         many=True,
@@ -66,7 +60,7 @@ class QuestionSerializer(serializers.ModelSerializer):
             'source_document',
             'generation_job',
             'options',
-            'created_by',
+            'created_by_id',
             'created_at',
             'updated_at',
         )
@@ -74,7 +68,7 @@ class QuestionSerializer(serializers.ModelSerializer):
             'id',
             'source_document',
             'generation_job',
-            'created_by',
+            'created_by_id',
             'created_at',
             'updated_at',
         )
@@ -153,10 +147,26 @@ class QuestionSerializer(serializers.ModelSerializer):
             self._replace_options(question, options)
         return question
 
+    def _request_user(self):
+        request = self.context.get('request')
+        return getattr(request, 'user', None) if request else None
+
     @transaction.atomic
     def update(self, instance, validated_data):
         options = validated_data.pop('options', None)
         labels = validated_data.pop('labels', None)
+        user = self._request_user()
+
+        # Public bank: non-owners get a clone instead of mutating shared rows.
+        if user and instance.created_by_id != user.id:
+            return self._clone_for_user(
+                instance,
+                validated_data,
+                options=options,
+                labels=labels,
+                user=user,
+            )
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -169,6 +179,49 @@ class QuestionSerializer(serializers.ModelSerializer):
             self._replace_options(instance, options)
 
         return instance
+
+    def _clone_for_user(self, instance, validated_data, *, options, labels, user):
+        clone_fields = (
+            'question_type',
+            'text',
+            'difficulty',
+            'marks',
+            'grade',
+            'subject',
+            'correct_answer',
+            'source_document',
+        )
+        create_kwargs = {
+            field: getattr(instance, field) for field in clone_fields
+        }
+        create_kwargs.update(validated_data)
+        create_kwargs['created_by'] = user
+        create_kwargs['generation_job'] = None
+
+        question = Question.objects.create(**create_kwargs)
+
+        if labels is not None:
+            question.labels.set(labels)
+        else:
+            question.labels.set(instance.labels.all())
+
+        question_type = question.question_type
+        if question_type == QuestionType.MCQ:
+            if options is not None:
+                self._replace_options(question, options)
+            else:
+                Option.objects.bulk_create(
+                    [
+                        Option(
+                            question=question,
+                            text=opt.text,
+                            is_correct=opt.is_correct,
+                            order=opt.order,
+                        )
+                        for opt in instance.options.all()
+                    ],
+                )
+        return question
 
 
 class QuestionGenerationJobSerializer(serializers.ModelSerializer):

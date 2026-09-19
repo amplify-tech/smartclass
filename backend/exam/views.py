@@ -83,7 +83,6 @@ class QuestionViewSet(viewsets.ModelViewSet):
                 'subject',
                 'source_document',
                 'generation_job',
-                'created_by',
             )
             .prefetch_related('options', 'labels')
         )

@@ -250,11 +250,6 @@ export default function QuestionFormDrawer({
       : mode === 'edit'
         ? 'Edit Question'
         : 'Add Question'
-  const createdByName =
-    (mode === 'edit' || mode === 'view') && question?.created_by
-      ? String(question.created_by.first_name || '').trim() ||
-        question.created_by.email
-      : null
 
   return (
     <Offcanvas
@@ -286,13 +281,6 @@ export default function QuestionFormDrawer({
     >
       <form id="question-bank-form" onSubmit={handleSubmit(onSubmit)} noValidate>
         <fieldset disabled={readOnly} className="border-0 p-0 m-0">
-        {createdByName && (
-          <p className="text-muted small mb-3">
-            Created by{' '}
-            <span className="badge text-bg-light border">{createdByName}</span>
-          </p>
-        )}
-
         <FormField
           id="qb-text"
           label="Question"
