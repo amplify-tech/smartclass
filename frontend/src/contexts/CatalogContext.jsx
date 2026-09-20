@@ -4,6 +4,7 @@ import { getProfile } from '../api/auth'
 import { listGrades } from '../api/grades'
 import { listSubjects } from '../api/subjects'
 import { Alert, Box, Button, Spinner } from '../components/common_ui'
+import { getApiErrorMessage } from '../utils/apiErrors'
 
 const CatalogContext = createContext(null)
 
@@ -37,12 +38,7 @@ export function CatalogProvider({ children }) {
         }
       } catch (err) {
         if (!cancelled) {
-          const message =
-            err.response?.data?.detail ||
-            err.response?.data?.error ||
-            err.message ||
-            'Failed to load app data'
-          setError(message)
+          setError(getApiErrorMessage(err, 'Failed to load app data'))
           setStatus('error')
         }
       }

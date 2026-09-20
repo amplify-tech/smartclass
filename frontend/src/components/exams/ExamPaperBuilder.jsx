@@ -8,20 +8,19 @@ import {
   reorderExamQuestions,
 } from '../../api/exams'
 import { useCatalog } from '../../contexts/CatalogContext'
+import { getApiErrorMessage } from '../../utils/apiErrors'
+import { QUESTION_TYPE_LABELS } from '../../utils/examLabels'
 import {
   Alert,
   Box,
   Button,
   Card,
   CardBody,
-  Spinner,
+  EmptyState,
+  ErrorPanel,
+  LoadingBlock,
+  PageHeader,
 } from '../common_ui'
-
-const TYPE_LABELS = {
-  mcq: 'MCQ',
-  short: 'Short Answer',
-  long: 'Long Answer',
-}
 
 function labelsText(labels) {
   if (!labels?.length) return null
@@ -90,12 +89,7 @@ export default function ExamPaperBuilder({ examId }) {
       setExam(null)
       setPlacements([])
       setRemovedIds(new Set())
-      setError(
-        err.response?.data?.detail ||
-          err.response?.data?.error ||
-          err.message ||
-          'Failed to load exam',
-      )
+      setError(getApiErrorMessage(err, 'Failed to load exam'))
       setStatus('error')
     }
   }, [examId])
@@ -103,6 +97,16 @@ export default function ExamPaperBuilder({ examId }) {
   useEffect(() => {
     loadExam()
   }, [loadExam])
+
+  useEffect(() => {
+    if (!isDirty) return undefined
+    const onBeforeUnload = (event) => {
+      event.preventDefault()
+      event.returnValue = ''
+    }
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isDirty])
 
   function removePlacement(examQuestionId) {
     setPlacements((prev) => prev.filter((item) => item.id !== examQuestionId))
@@ -150,13 +154,7 @@ export default function ExamPaperBuilder({ examId }) {
       setSaveStatus('saved')
     } catch (err) {
       setSaveStatus('error')
-      setSaveError(
-        err.response?.data?.detail ||
-          err.response?.data?.error ||
-          err.response?.data?.items?.[0] ||
-          err.message ||
-          'Failed to save changes',
-      )
+      setSaveError(getApiErrorMessage(err, 'Failed to save changes'))
     }
   }
 
@@ -166,11 +164,24 @@ export default function ExamPaperBuilder({ examId }) {
 
   const selectQuestionsPath = `/exams/question-bank?mode=select&examId=${encodeURIComponent(examId)}`
 
+  const breadcrumbs = [
+    { label: 'Home', to: '/' },
+    { label: 'Exams', to: '/exams' },
+    { label: exam?.title || 'Build paper' },
+  ]
+
   if (status === 'loading') {
     return (
-      <Box className="d-flex align-items-center gap-2 py-5 justify-content-center">
-        <Spinner label="Loading exam paper…" />
-        <span className="text-muted">Loading exam paper…</span>
+      <Box>
+        <PageHeader
+          breadcrumbs={[
+            { label: 'Home', to: '/' },
+            { label: 'Exams', to: '/exams' },
+            { label: 'Build paper' },
+          ]}
+          title="Build Exam Paper"
+        />
+        <LoadingBlock label="Loading exam paper…" />
       </Box>
     )
   }
@@ -178,15 +189,19 @@ export default function ExamPaperBuilder({ examId }) {
   if (status === 'error') {
     return (
       <Box>
-        <Button as={Link} to="/exams" variant="link" className="px-0 mb-3">
-          ← Back to Exam List
-        </Button>
-        <Alert variant="danger" className="mb-3">
-          {error}
-        </Alert>
-        <Button type="button" onClick={loadExam}>
-          Try again
-        </Button>
+        <PageHeader
+          breadcrumbs={[
+            { label: 'Home', to: '/' },
+            { label: 'Exams', to: '/exams' },
+            { label: 'Build paper' },
+          ]}
+          title="Build Exam Paper"
+        />
+        <ErrorPanel message={error} onRetry={loadExam}>
+          <Button as={Link} to="/exams" variant="outline-secondary">
+            Back to Exam List
+          </Button>
+        </ErrorPanel>
       </Box>
     )
   }
@@ -195,28 +210,35 @@ export default function ExamPaperBuilder({ examId }) {
 
   return (
     <Box>
-      <Button as={Link} to="/exams" variant="link" className="px-0 mb-2">
-        ← Back to Exam List
-      </Button>
+      <PageHeader
+        breadcrumbs={breadcrumbs}
+        title="Build Exam Paper"
+        description={[exam?.title, ...metaParts].filter(Boolean).join(' · ')}
+        actions={
+          <Button as={Link} to={selectQuestionsPath} variant="outline">
+            Add Questions
+          </Button>
+        }
+      />
 
-      <h1 className="h4 mb-1">Build Exam Paper</h1>
-      <p className="fw-semibold mb-1">{exam?.title || '—'}</p>
-      {metaParts.length > 0 && (
-        <p className="text-muted mb-4">{metaParts.join(' · ')}</p>
+      {isDirty && (
+        <Alert variant="warning" className="mb-3 py-2">
+          You have unsaved changes. Save before previewing or leaving this page.
+        </Alert>
       )}
 
       <Card>
-        <CardBody className="p-4">
+        <CardBody className="sc-card-body">
           {placements.length === 0 ? (
-            <Box className="text-center py-5">
-              <p className="text-muted mb-3">
-                No questions on this paper yet. Add questions from the bank to
-                get started.
-              </p>
-              <Button as={Link} to={selectQuestionsPath}>
-                + Add Questions
-              </Button>
-            </Box>
+            <EmptyState
+              title="No questions on this paper yet"
+              description="Add questions from the bank, then drag to set the order."
+              action={
+                <Button as={Link} to={selectQuestionsPath}>
+                  Add Questions
+                </Button>
+              }
+            />
           ) : (
             <ReactSortable
               tag="ul"
@@ -235,7 +257,7 @@ export default function ExamPaperBuilder({ examId }) {
                 const question = placement.question || {}
                 const labelNames = labelsText(question.labels)
                 const typeLabel =
-                  TYPE_LABELS[question.question_type] ||
+                  QUESTION_TYPE_LABELS[question.question_type] ||
                   question.question_type ||
                   '—'
                 const marks = Number(placement.marks) || 0
@@ -305,16 +327,6 @@ export default function ExamPaperBuilder({ examId }) {
                 </Box>
               </Box>
 
-              <Box className="mb-4">
-                <Button
-                  as={Link}
-                  to={selectQuestionsPath}
-                  variant="outline-secondary"
-                >
-                  + Add Questions
-                </Button>
-              </Box>
-
               {saveError && (
                 <Alert variant="danger" className="mb-3">
                   {saveError}
@@ -341,9 +353,7 @@ export default function ExamPaperBuilder({ examId }) {
                   disabled={saveStatus === 'saving' || isDirty}
                   onClick={handlePreview}
                   title={
-                    isDirty
-                      ? 'Save changes before previewing'
-                      : undefined
+                    isDirty ? 'Save changes before previewing' : undefined
                   }
                 >
                   Preview Paper

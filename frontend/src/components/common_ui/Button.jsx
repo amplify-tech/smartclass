@@ -5,13 +5,15 @@ const VARIANTS = {
   secondary: 'btn-secondary',
   outline: 'btn-outline-primary',
   'outline-secondary': 'btn-outline-secondary',
+  success: 'btn-success',
   danger: 'btn-danger',
+  warning: 'btn-warning',
   link: 'btn-link',
 }
 
 /**
  * Bootstrap button wrapper. Pass `as` to render as another element (e.g. Link).
- * @param {'primary'|'secondary'|'outline'|'outline-secondary'|'danger'|'link'} [variant]
+ * @param {'primary'|'secondary'|'outline'|'outline-secondary'|'success'|'danger'|'warning'|'link'} [variant]
  * @param {'sm'|'lg'} [size]
  * @param {React.ElementType} [as]
  */

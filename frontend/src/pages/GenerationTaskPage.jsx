@@ -6,6 +6,7 @@ import {
   Button,
   Card,
   CardBody,
+  PageHeader,
   Spinner,
 } from '../components/common_ui'
 import { useCatalog } from '../contexts/CatalogContext'
@@ -40,11 +41,19 @@ export default function GenerationTaskPage() {
   const metaParts = [gradeName, subjectName].filter(Boolean)
   const completedMeta = [subjectName, gradeName, description]
     .filter(Boolean)
-    .join(' • ')
+    .join(' · ')
+
+  const breadcrumbs = [
+    { label: 'Home', to: '/' },
+    { label: 'Exams', to: '/exams' },
+    { label: 'Pending Tasks', to: '/exams/pending-tasks' },
+    { label: taskId ? `Job #${taskId}` : 'Generation task' },
+  ]
 
   if (!taskId) {
     return (
       <Box>
+        <PageHeader breadcrumbs={breadcrumbs} title="Generation task" />
         <Alert variant="danger" className="mb-3">
           Missing generation task id.
         </Alert>
@@ -57,52 +66,114 @@ export default function GenerationTaskPage() {
 
   if (status === 'failed' || status === 'error') {
     return (
-      <Card>
-        <CardBody className="p-4 p-md-5">
-          <h1 className="h4 mb-3">⚠ Question generation failed</h1>
-          <p className="text-muted mb-2">
-            We couldn&apos;t generate the questions this time.
-          </p>
-          {error ? (
-            <Alert variant="danger" className="mb-4">
-              {error}
-            </Alert>
-          ) : (
-            <Box className="mb-4" />
-          )}
-          <Box className="d-flex flex-wrap gap-2">
-            <Button as={Link} to="/exams/generate">
-              Try Again
-            </Button>
-            <Button as={Link} to="/exams/pending-tasks" variant="outline-secondary">
-              Back to Tasks
-            </Button>
-          </Box>
-        </CardBody>
-      </Card>
+      <Box>
+        <PageHeader
+          breadcrumbs={breadcrumbs}
+          title="Question generation failed"
+          description="We could not generate the questions this time."
+        />
+        <Card>
+          <CardBody className="sc-card-body">
+            {error ? (
+              <Alert variant="danger" className="mb-4">
+                {error}
+              </Alert>
+            ) : null}
+            <Box className="d-flex flex-wrap gap-2">
+              <Button as={Link} to="/exams/generate">
+                Try again
+              </Button>
+              <Button
+                as={Link}
+                to="/exams/pending-tasks"
+                variant="outline-secondary"
+              >
+                Back to Tasks
+              </Button>
+            </Box>
+          </CardBody>
+        </Card>
+      </Box>
     )
   }
 
   if (status === 'completed') {
     return (
+      <Box>
+        <PageHeader
+          breadcrumbs={breadcrumbs}
+          title="Questions generated"
+          description="Review the generated questions before using them in an exam."
+        />
+        <Card>
+          <CardBody className="sc-card-body text-center py-5">
+            <Alert variant="success" className="d-inline-block mb-3">
+              Generation completed successfully
+            </Alert>
+            {completedMeta ? (
+              <p className="text-muted mb-3">{completedMeta}</p>
+            ) : null}
+            <p className="mb-4 fw-semibold">
+              {questionCount} question{questionCount === 1 ? '' : 's'} generated
+            </p>
+            <Box className="d-flex flex-wrap justify-content-center gap-2">
+              <Button
+                as={Link}
+                to={`/exams/question-bank?jobId=${encodeURIComponent(taskId)}`}
+              >
+                Review Questions
+              </Button>
+              <Button as={Link} to="/exams/generate" variant="outline-secondary">
+                Generate More
+              </Button>
+            </Box>
+          </CardBody>
+        </Card>
+      </Box>
+    )
+  }
+
+  const generatingLabel =
+    requestedCount != null
+      ? `Generating ${requestedCount} question${requestedCount === 1 ? '' : 's'}…`
+      : 'Generating questions…'
+
+  return (
+    <Box>
+      <PageHeader
+        breadcrumbs={breadcrumbs}
+        title="Generating Questions"
+        description={
+          metaParts.length > 0 ? metaParts.join(' · ') : undefined
+        }
+      />
       <Card>
-        <CardBody className="p-4 p-md-5 text-center">
-          <h1 className="h4 mb-3">✓ Questions generated successfully</h1>
-          {completedMeta ? (
-            <p className="text-muted mb-3">{completedMeta}</p>
-          ) : null}
-          <p className="mb-3">
-            {questionCount} question{questionCount === 1 ? '' : 's'} generated
-          </p>
-          <p className="text-muted mb-4">
-            Review the generated questions before using them.
-          </p>
-          <Box className="d-flex flex-column align-items-center gap-2">
+        <CardBody className="sc-card-body">
+          {description ? <p className="mb-4">{description}</p> : null}
+
+          <Box
+            className="d-flex flex-column align-items-center text-center py-4"
+            aria-live="polite"
+            aria-busy={isPolling ? 'true' : undefined}
+          >
+            <Spinner label={generatingLabel} className="mb-3" />
+            <p className="mb-2 fw-semibold">{generatingLabel}</p>
+            <p className="text-muted mb-0">
+              Your questions are being prepared. This may take a few moments.
+            </p>
+          </Box>
+
+          <Box className="text-center text-muted small mt-4 mb-4">
+            You can leave this page. Generation continues in the background.
+          </Box>
+
+          <Box className="d-flex flex-wrap justify-content-center gap-2">
             <Button
               as={Link}
-              to={`/exams/question-bank?jobId=${encodeURIComponent(taskId)}`}
+              to="/exams/pending-tasks"
+              variant="outline-secondary"
             >
-              Review Questions
+              View All Tasks
             </Button>
             <Button as={Link} to="/exams/generate" variant="outline-secondary">
               Generate More
@@ -110,53 +181,6 @@ export default function GenerationTaskPage() {
           </Box>
         </CardBody>
       </Card>
-    )
-  }
-
-  // Loading / pending / running — clean polling state
-  const generatingLabel =
-    requestedCount != null
-      ? `Generating ${requestedCount} question${requestedCount === 1 ? '' : 's'}…`
-      : 'Generating questions…'
-
-  return (
-    <Card>
-      <CardBody className="p-4 p-md-5">
-        <h1 className="h4 mb-2">Generating Questions</h1>
-        {metaParts.length > 0 && (
-          <p className="text-muted mb-1">{metaParts.join(' • ')}</p>
-        )}
-        {description ? <p className="mb-4">{description}</p> : <Box className="mb-4" />}
-
-        <Box
-          className="d-flex flex-column align-items-center text-center py-4"
-          aria-live="polite"
-          aria-busy={isPolling ? 'true' : undefined}
-        >
-          <Spinner label={generatingLabel} className="mb-3" />
-          <p className="mb-2 fw-semibold">{generatingLabel}</p>
-          <p className="text-muted mb-0">
-            Your questions are being prepared.
-            <br />
-            This may take a few moments.
-          </p>
-        </Box>
-
-        <Box className="text-center text-muted small mt-5 mb-4">
-          You can safely leave this page.
-          <br />
-          The generation will continue in the background.
-        </Box>
-
-        <Box className="d-flex flex-wrap justify-content-center gap-2">
-          <Button as={Link} to="/exams/pending-tasks" variant="outline-secondary">
-            View All Tasks
-          </Button>
-          <Button as={Link} to="/exams/generate" variant="outline-secondary">
-            Generate More
-          </Button>
-        </Box>
-      </CardBody>
-    </Card>
+    </Box>
   )
 }

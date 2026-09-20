@@ -5,11 +5,12 @@ const VARIANTS = {
   success: 'alert-success',
   warning: 'alert-warning',
   info: 'alert-info',
+  secondary: 'alert-secondary',
 }
 
 /**
  * Bootstrap alert.
- * @param {'danger'|'success'|'warning'|'info'} [variant]
+ * @param {'danger'|'success'|'warning'|'info'|'secondary'} [variant]
  */
 export default function Alert({
   variant = 'danger',

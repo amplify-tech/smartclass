@@ -3,38 +3,31 @@ import { Link } from 'react-router-dom'
 
 import { listExams } from '../api/exams'
 import {
-  Alert,
   Box,
   Button,
   Card,
   CardBody,
+  EmptyState,
+  ErrorPanel,
+  LoadingBlock,
+  PageHeader,
   Pagination,
-  Spinner,
+  StatusBadge,
 } from '../components/common_ui'
 import { useCatalog } from '../contexts/CatalogContext'
+import { getApiErrorMessage } from '../utils/apiErrors'
+import {
+  DIFFICULTY_LABELS,
+  DIFFICULTY_TONE,
+  EXAM_STATUS_LABELS,
+  EXAM_STATUS_TONE,
+} from '../utils/examLabels'
+import { formatDateTime } from '../utils/formatDate'
 import {
   buildListParams,
   DEFAULT_PAGE_SIZE,
   parsePaginatedResponse,
 } from '../utils/pagination'
-
-const STATUS_LABELS = {
-  draft: 'Draft',
-  finalized: 'Finalized',
-}
-
-const DIFFICULTY_LABELS = {
-  easy: 'Easy',
-  medium: 'Medium',
-  hard: 'Hard',
-}
-
-function formatDate(value) {
-  if (!value) return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleString()
-}
 
 export default function ExamsPage() {
   const { grades, subjects } = useCatalog()
@@ -60,9 +53,7 @@ export default function ExamsPage() {
     setStatus('loading')
     setError(null)
     try {
-      const { data } = await listExams(
-        buildListParams({ page, pageSize }),
-      )
+      const { data } = await listExams(buildListParams({ page, pageSize }))
       const parsed = parsePaginatedResponse(data, { page, pageSize })
       setExams(parsed.results)
       setTotalCount(parsed.count)
@@ -70,12 +61,7 @@ export default function ExamsPage() {
       setStatus('ready')
     } catch (err) {
       setExams([])
-      setError(
-        err.response?.data?.detail ||
-          err.response?.data?.error ||
-          err.message ||
-          'Failed to load exams',
-      )
+      setError(getApiErrorMessage(err, 'Failed to load exams'))
       setStatus('error')
     }
   }, [page, pageSize])
@@ -86,43 +72,44 @@ export default function ExamsPage() {
 
   return (
     <Box>
-      <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
-        <h1 className="h4 mb-0">Exam List</h1>
-        <Button as={Link} to="/exams/create">
-          + Create Exam
-        </Button>
-      </Box>
+      <PageHeader
+        breadcrumbs={[
+          { label: 'Home', to: '/' },
+          { label: 'Exams' },
+        ]}
+        title="Exam List"
+        description="Create, build, and preview exam papers for your classes."
+        actions={
+          <Button as={Link} to="/exams/create">
+            Create Exam
+          </Button>
+        }
+      />
 
       <Card>
-        <CardBody className="p-4">
-          {status === 'loading' && (
-            <Box className="d-flex align-items-center gap-2 py-5 justify-content-center">
-              <Spinner label="Loading exams…" />
-              <span className="text-muted">Loading exams…</span>
-            </Box>
-          )}
+        <CardBody className="sc-card-body">
+          {status === 'loading' && <LoadingBlock label="Loading exams…" />}
 
           {status === 'error' && (
-            <Box className="py-3">
-              <Alert variant="danger" className="mb-3">
-                {error}
-              </Alert>
-              <Button type="button" onClick={loadExams}>
-                Try again
-              </Button>
-            </Box>
+            <ErrorPanel message={error} onRetry={loadExams} />
           )}
 
           {status === 'ready' && exams.length === 0 && (
-            <p className="text-muted text-center py-5 mb-0">
-              No exams yet. Create one to get started.
-            </p>
+            <EmptyState
+              title="No exams yet"
+              description="Create an exam to start selecting questions and building a paper."
+              action={
+                <Button as={Link} to="/exams/create">
+                  Create Exam
+                </Button>
+              }
+            />
           )}
 
           {status === 'ready' && exams.length > 0 && (
             <>
               <Box className="table-responsive">
-                <table className="table table-hover align-middle mb-0">
+                <table className="table table-hover align-middle mb-0 sc-table">
                   <thead>
                     <tr>
                       <th scope="col">Title</th>
@@ -143,56 +130,72 @@ export default function ExamsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {exams.map((exam) => (
-                      <tr key={exam.id}>
-                        <td className="fw-medium">{exam.title || '—'}</td>
-                        <td>{gradeLabel(exam.grade)}</td>
-                        <td>{subjectLabel(exam.subject)}</td>
-                        <td>
-                          {DIFFICULTY_LABELS[exam.difficulty] ||
-                            exam.difficulty ||
-                            '—'}
-                        </td>
-                        <td className="text-end">{exam.question_count ?? 0}</td>
-                        <td className="text-end">{exam.total_marks ?? 0}</td>
-                        <td>
-                          <span className="badge text-bg-secondary text-capitalize">
-                            {STATUS_LABELS[exam.status] || exam.status || '—'}
-                          </span>
-                        </td>
-                        <td className="text-nowrap small text-muted">
-                          {formatDate(exam.created_at)}
-                        </td>
-                        <td className="text-end text-nowrap">
-                          <Box className="d-inline-flex flex-wrap gap-2 justify-content-end">
-                            <Button
-                              as={Link}
-                              to={`/exams/${encodeURIComponent(exam.id)}/build`}
-                              size="sm"
-                              variant="outline"
+                    {exams.map((exam) => {
+                      const difficulty = exam.difficulty
+                      const examStatus = exam.status
+                      return (
+                        <tr key={exam.id}>
+                          <td className="fw-medium">{exam.title || '—'}</td>
+                          <td>{gradeLabel(exam.grade)}</td>
+                          <td>{subjectLabel(exam.subject)}</td>
+                          <td>
+                            {difficulty ? (
+                              <StatusBadge
+                                tone={DIFFICULTY_TONE[difficulty] || 'secondary'}
+                              >
+                                {DIFFICULTY_LABELS[difficulty] || difficulty}
+                              </StatusBadge>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td className="text-end">
+                            {exam.question_count ?? 0}
+                          </td>
+                          <td className="text-end">{exam.total_marks ?? 0}</td>
+                          <td>
+                            <StatusBadge
+                              tone={EXAM_STATUS_TONE[examStatus] || 'secondary'}
                             >
-                              Build paper
-                            </Button>
-                            <Button
-                              as={Link}
-                              to={`/exams/${encodeURIComponent(exam.id)}/preview`}
-                              size="sm"
-                              variant="outline-secondary"
-                            >
-                              Preview
-                            </Button>
-                            <Button
-                              as={Link}
-                              to={`/exams/question-bank?mode=select&examId=${encodeURIComponent(exam.id)}`}
-                              size="sm"
-                              variant="outline-secondary"
-                            >
-                              Add questions
-                            </Button>
-                          </Box>
-                        </td>
-                      </tr>
-                    ))}
+                              {EXAM_STATUS_LABELS[examStatus] ||
+                                examStatus ||
+                                '—'}
+                            </StatusBadge>
+                          </td>
+                          <td className="text-nowrap small text-muted">
+                            {formatDateTime(exam.created_at)}
+                          </td>
+                          <td className="text-end text-nowrap">
+                            <Box className="d-inline-flex flex-wrap gap-2 justify-content-end">
+                              <Button
+                                as={Link}
+                                to={`/exams/${encodeURIComponent(exam.id)}/build`}
+                                size="sm"
+                                variant="outline"
+                              >
+                                Build
+                              </Button>
+                              <Button
+                                as={Link}
+                                to={`/exams/${encodeURIComponent(exam.id)}/preview`}
+                                size="sm"
+                                variant="outline-secondary"
+                              >
+                                Preview
+                              </Button>
+                              <Button
+                                as={Link}
+                                to={`/exams/question-bank?mode=select&examId=${encodeURIComponent(exam.id)}`}
+                                size="sm"
+                                variant="outline-secondary"
+                              >
+                                Add questions
+                              </Button>
+                            </Box>
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </Box>

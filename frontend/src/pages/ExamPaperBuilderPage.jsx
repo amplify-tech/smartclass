@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 
 import ExamPaperBuilder from '../components/exams/ExamPaperBuilder'
-import { Alert, Box, Button } from '../components/common_ui'
+import { Alert, Box, Button, PageHeader } from '../components/common_ui'
 
 export default function ExamPaperBuilderPage() {
   const { examId } = useParams()
@@ -9,6 +9,14 @@ export default function ExamPaperBuilderPage() {
   if (!examId) {
     return (
       <Box>
+        <PageHeader
+          breadcrumbs={[
+            { label: 'Home', to: '/' },
+            { label: 'Exams', to: '/exams' },
+            { label: 'Build paper' },
+          ]}
+          title="Build Exam Paper"
+        />
         <Alert variant="danger" className="mb-3">
           Missing exam id.
         </Alert>

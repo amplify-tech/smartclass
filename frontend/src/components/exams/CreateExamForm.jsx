@@ -1,6 +1,6 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
 import { createExam } from '../../api/exams'
@@ -9,8 +9,6 @@ import { applyApiErrors } from '../../utils/apiErrors'
 import {
   Box,
   Button,
-  Card,
-  CardBody,
   FormField,
   FormRootError,
   Input,
@@ -24,6 +22,10 @@ const schema = z.object({
   school_name: z.string().trim().min(1, 'Enter a school name').max(255),
   subject: z.coerce.number().int().positive('Select a subject'),
   grade: z.coerce.number().int().positive('Select a class'),
+  difficulty: z.union([
+    z.enum(['easy', 'medium', 'hard']),
+    z.literal(''),
+  ]),
   duration_minutes: z.coerce
     .number()
     .int('Enter whole minutes')
@@ -48,6 +50,7 @@ export default function CreateExamForm() {
       school_name: '',
       subject: '',
       grade: '',
+      difficulty: '',
       duration_minutes: 60,
       description: '',
     },
@@ -62,6 +65,9 @@ export default function CreateExamForm() {
       duration_minutes: values.duration_minutes,
       description: values.description?.trim() || '',
     }
+    if (values.difficulty) {
+      payload.difficulty = values.difficulty
+    }
 
     try {
       const { data } = await createExam(payload)
@@ -74,94 +80,117 @@ export default function CreateExamForm() {
   }
 
   return (
-    <Card>
-      <CardBody className="p-4">
-        <form onSubmit={handleSubmit(onSubmit)} noValidate>
-          <FormField
-            id="exam-school-name"
-            label="School name"
-            error={errors.school_name?.message}
-          >
-            <Input disabled={isSubmitting} {...register('school_name')} />
-          </FormField>
+    <form onSubmit={handleSubmit(onSubmit)} noValidate>
+      <FormField
+        id="exam-school-name"
+        label="School name"
+        error={errors.school_name?.message}
+      >
+        <Input disabled={isSubmitting} {...register('school_name')} />
+      </FormField>
 
-          <FormField
-            id="exam-title"
-            label="Exam name"
-            error={errors.title?.message}
-          >
-            <Input disabled={isSubmitting} {...register('title')} />
-          </FormField>
+      <FormField
+        id="exam-title"
+        label="Exam name"
+        error={errors.title?.message}
+      >
+        <Input disabled={isSubmitting} {...register('title')} />
+      </FormField>
 
-          <Box className="row g-0">
-            <FormField
-              id="exam-subject"
-              label="Subject"
-              error={errors.subject?.message}
-              className="col-sm-6 pe-sm-2"
-            >
-              <Select disabled={isSubmitting} {...register('subject')}>
-                <option value=""> </option>
-                {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
+      <Box className="row g-0">
+        <FormField
+          id="exam-subject"
+          label="Subject"
+          error={errors.subject?.message}
+          className="col-sm-6 pe-sm-2"
+        >
+          <Select disabled={isSubmitting} {...register('subject')}>
+            <option value="">Select subject</option>
+            {subjects.map((subject) => (
+              <option key={subject.id} value={subject.id}>
+                {subject.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
 
-            <FormField
-              id="exam-grade"
-              label="Class"
-              error={errors.grade?.message}
-              className="col-sm-6 ps-sm-2"
-            >
-              <Select disabled={isSubmitting} {...register('grade')}>
-                <option value=""> </option>
-                {grades.map((grade) => (
-                  <option key={grade.id} value={grade.id}>
-                    {grade.name}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-          </Box>
+        <FormField
+          id="exam-grade"
+          label="Class"
+          error={errors.grade?.message}
+          className="col-sm-6 ps-sm-2"
+        >
+          <Select disabled={isSubmitting} {...register('grade')}>
+            <option value="">Select class</option>
+            {grades.map((grade) => (
+              <option key={grade.id} value={grade.id}>
+                {grade.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      </Box>
 
-          <FormField
-            id="exam-duration"
-            label="Duration (minutes)"
-            error={errors.duration_minutes?.message}
-          >
-            <IntegerInput
-              disabled={isSubmitting}
-              min={1}
-              max={600}
-              {...register('duration_minutes')}
-            />
-          </FormField>
+      <Box className="row g-0">
+        <FormField
+          id="exam-difficulty"
+          label="Difficulty (optional)"
+          error={errors.difficulty?.message}
+          className="col-sm-6 pe-sm-2"
+        >
+          <Select disabled={isSubmitting} {...register('difficulty')}>
+            <option value="">Not set</option>
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </Select>
+        </FormField>
 
-          <FormField
-            id="exam-instructions"
-            label="Instructions (optional)"
-            error={errors.description?.message}
-          >
-            <Textarea
-              disabled={isSubmitting}
-              rows={3}
-              placeholder={'Answer all questions.\nRead each question carefully.'}
-              {...register('description')}
-            />
-          </FormField>
+        <FormField
+          id="exam-duration"
+          label="Duration (minutes)"
+          error={errors.duration_minutes?.message}
+          className="col-sm-6 ps-sm-2"
+        >
+          <IntegerInput
+            disabled={isSubmitting}
+            min={1}
+            max={600}
+            {...register('duration_minutes')}
+          />
+        </FormField>
+      </Box>
 
-          <FormRootError message={errors.root?.message} />
+      <FormField
+        id="exam-instructions"
+        label="Instructions (optional)"
+        error={errors.description?.message}
+      >
+        <Textarea
+          disabled={isSubmitting}
+          rows={3}
+          placeholder={
+            'Answer all questions.\nRead each question carefully.'
+          }
+          {...register('description')}
+        />
+      </FormField>
 
-          <Box className="d-flex justify-content-end">
-            <Button type="submit" disabled={isSubmitting}>
-              {isSubmitting ? 'Creating…' : 'Continue →'}
-            </Button>
-          </Box>
-        </form>
-      </CardBody>
-    </Card>
+      <FormRootError message={errors.root?.message} />
+
+      <Box className="d-flex flex-wrap justify-content-between gap-2">
+        <Button
+          as={Link}
+          to="/exams"
+          variant="outline-secondary"
+          disabled={isSubmitting}
+        >
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Creating…' : 'Continue to questions'}
+        </Button>
+      </Box>
+    </form>
   )
 }

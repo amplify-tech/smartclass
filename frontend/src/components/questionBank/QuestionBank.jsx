@@ -5,6 +5,8 @@ import { addExamQuestions, getExam } from '../../api/exams'
 import { listLabels } from '../../api/labels'
 import { listQuestions } from '../../api/questions'
 import { useCatalog } from '../../contexts/CatalogContext'
+import { getApiErrorMessage } from '../../utils/apiErrors'
+import { QUESTION_TYPE_LABELS } from '../../utils/examLabels'
 import {
   buildListParams,
   DEFAULT_PAGE_SIZE,
@@ -16,18 +18,16 @@ import {
   Button,
   Card,
   CardBody,
+  EmptyState,
+  ErrorPanel,
   Input,
+  LoadingBlock,
+  PageHeader,
   Pagination,
   Select,
   Spinner,
 } from '../common_ui'
 import QuestionFormDrawer from './QuestionFormDrawer'
-
-const TYPE_LABELS = {
-  mcq: 'MCQ',
-  short: 'Short',
-  long: 'Long',
-}
 
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -75,7 +75,6 @@ export default function QuestionBank() {
   const [totalCount, setTotalCount] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
 
-  // id → marks (keeps selection across pages in select mode)
   const [selectedMap, setSelectedMap] = useState(() => new Map())
   const [submitStatus, setSubmitStatus] = useState('idle')
   const [submitError, setSubmitError] = useState(null)
@@ -98,7 +97,6 @@ export default function QuestionBank() {
     return match?.name || ''
   }, [exam, subjects])
 
-  // Load exam when entering selection mode
   useEffect(() => {
     if (!isSelectMode) {
       setExam(null)
@@ -137,12 +135,7 @@ export default function QuestionBank() {
         if (cancelled) return
         setExam(null)
         setExamStatus('error')
-        setExamError(
-          err.response?.data?.detail ||
-            err.response?.data?.error ||
-            err.message ||
-            'Failed to load exam',
-        )
+        setExamError(getApiErrorMessage(err, 'Failed to load exam'))
       }
     }
 
@@ -152,7 +145,6 @@ export default function QuestionBank() {
     }
   }, [isSelectMode, examId, jobId])
 
-  // Debounce search text before hitting the API
   useEffect(() => {
     const timer = setTimeout(() => {
       const next = searchInput.trim()
@@ -193,12 +185,7 @@ export default function QuestionBank() {
         setStatus('ready')
         setError(null)
       } catch (err) {
-        const message =
-          err.response?.data?.detail ||
-          err.response?.data?.error ||
-          err.message ||
-          'Failed to load questions'
-        setError(message)
+        setError(getApiErrorMessage(err, 'Failed to load questions'))
         setStatus('error')
       }
     },
@@ -241,8 +228,6 @@ export default function QuestionBank() {
     loadQuestions()
   }, [loadQuestions])
 
-  // In normal mode, drop selections that left the current page.
-  // In select mode, keep selections across pages.
   useEffect(() => {
     if (isSelectMode) return
     setSelectedMap((prev) => {
@@ -319,11 +304,7 @@ export default function QuestionBank() {
     } catch (err) {
       setSubmitStatus('error')
       setSubmitError(
-        err.response?.data?.detail ||
-          err.response?.data?.error ||
-          err.response?.data?.question_ids?.[0] ||
-          err.message ||
-          'Failed to add questions to exam',
+        getApiErrorMessage(err, 'Failed to add questions to exam'),
       )
     }
   }
@@ -362,31 +343,57 @@ export default function QuestionBank() {
       jobId,
   )
 
-  if (isSelectMode && examStatus === 'loading') {
-    return (
-      <Box className="d-flex align-items-center gap-2 py-5 justify-content-center">
-        <Spinner label="Loading exam…" />
-        <span className="text-muted">Loading exam…</span>
-      </Box>
-    )
-  }
-
   const builderPath = examId
     ? `/exams/${encodeURIComponent(examId)}/build`
     : '/exams'
 
+  const breadcrumbs = isSelectMode
+    ? [
+        { label: 'Home', to: '/' },
+        { label: 'Exams', to: '/exams' },
+        {
+          label: exam?.title || 'Exam',
+          to: builderPath,
+        },
+        { label: 'Select questions' },
+      ]
+    : [
+        { label: 'Home', to: '/' },
+        { label: 'Exams', to: '/exams' },
+        { label: 'Question Bank' },
+      ]
+
+  if (isSelectMode && examStatus === 'loading') {
+    return (
+      <Box>
+        <PageHeader
+          breadcrumbs={breadcrumbs}
+          title="Select Questions"
+        />
+        <LoadingBlock label="Loading exam…" />
+      </Box>
+    )
+  }
+
   if (isSelectMode && examStatus === 'error') {
     return (
       <Box>
-        <Button as={Link} to="/exams" variant="link" className="px-0 mb-3">
-          ← Back to Exam List
-        </Button>
-        <Alert variant="danger" className="mb-3">
-          {examError}
-        </Alert>
-        <Button as={Link} to="/exams/create">
-          Create exam
-        </Button>
+        <PageHeader
+          breadcrumbs={[
+            { label: 'Home', to: '/' },
+            { label: 'Exams', to: '/exams' },
+            { label: 'Select questions' },
+          ]}
+          title="Select Questions"
+        />
+        <ErrorPanel message={examError}>
+          <Button as={Link} to="/exams/create">
+            Create exam
+          </Button>
+          <Button as={Link} to="/exams" variant="outline-secondary">
+            Back to Exam List
+          </Button>
+        </ErrorPanel>
       </Box>
     )
   }
@@ -398,43 +405,44 @@ export default function QuestionBank() {
   return (
     <Box className={isSelectMode ? 'pb-5 mb-4' : undefined}>
       {isSelectMode ? (
-        <Box className="mb-4">
-          <Button
-            as={Link}
-            to={builderPath}
-            variant="link"
-            className="px-0 mb-2"
-          >
-            ← Back to Paper Builder
-          </Button>
-          <h1 className="h4 mb-1">Select Questions</h1>
-          <p className="text-muted mb-2">
-            {[exam?.title, gradeName].filter(Boolean).join(' · ')}
-            {subjectName ? ` · ${subjectName}` : ''}
-          </p>
-          <p className="small mb-0">
+        <PageHeader
+          breadcrumbs={breadcrumbs}
+          title="Select Questions"
+          description={[exam?.title, gradeName, subjectName]
+            .filter(Boolean)
+            .join(' · ')}
+        >
+          <p className="small mb-0 mt-2">
             <span className="fw-semibold">{selectedCount}</span> question
             {selectedCount === 1 ? '' : 's'} selected
             <span className="text-muted"> · </span>
             <span className="fw-semibold">{selectedMarks}</span> marks
           </p>
-        </Box>
+        </PageHeader>
       ) : (
-        <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
-          <h1 className="h4 mb-0">Question Bank</h1>
-          <Box className="d-flex flex-wrap gap-2">
-            <Button as={Link} to="/exams/generate" variant="outline-secondary">
-              + Generate Questions
-            </Button>
-            <Button type="button" onClick={openCreate}>
-              + Add Question
-            </Button>
-          </Box>
-        </Box>
+        <PageHeader
+          breadcrumbs={breadcrumbs}
+          title="Question Bank"
+          description="Browse, create, and reuse questions across exams."
+          actions={
+            <Box className="d-flex flex-wrap gap-2">
+              <Button as={Link} to="/exams/generate" variant="outline-secondary">
+                Generate Questions
+              </Button>
+              <Button type="button" onClick={openCreate}>
+                Add Question
+              </Button>
+            </Box>
+          }
+        />
       )}
 
-      <Card className={isSelectMode ? 'border-primary border-opacity-25' : undefined}>
-        <CardBody className="p-4">
+      <Card
+        className={
+          isSelectMode ? 'border-primary border-opacity-25' : undefined
+        }
+      >
+        <CardBody className="sc-card-body">
           {isSelectMode && (
             <Alert variant="info" className="mb-3 py-2">
               Selection mode — choose questions for this exam, then continue.
@@ -446,9 +454,7 @@ export default function QuestionBank() {
               variant="secondary"
               className="mb-3 py-2 d-flex flex-wrap align-items-center justify-content-between gap-2"
             >
-              <span>
-                Showing questions from generation job #{jobId}.
-              </span>
+              <span>Showing questions from generation job #{jobId}.</span>
               <Button
                 type="button"
                 size="sm"
@@ -544,32 +550,55 @@ export default function QuestionBank() {
           </Box>
 
           {status === 'error' && (
-            <Box className="py-3">
-              <Alert variant="danger" className="mb-3">
-                {error}
-              </Alert>
-              <Button type="button" onClick={() => loadQuestions()}>
-                Try again
-              </Button>
-            </Box>
+            <ErrorPanel
+              message={error}
+              onRetry={() => loadQuestions()}
+            />
           )}
 
           {status === 'ready' && questions.length === 0 && (
-            <p className="text-muted text-center py-5 mb-0">
-              {isJobMode
-                ? 'No questions were created for this generation job.'
-                : hasActiveFilters
-                  ? 'No questions match your search or filters.'
-                  : isSelectMode
-                    ? 'No questions available for this exam class and subject.'
-                    : 'No questions yet. Add one or generate from Exam.'}
-            </p>
+            <EmptyState
+              title={
+                isJobMode
+                  ? 'No questions for this job'
+                  : hasActiveFilters
+                    ? 'No matching questions'
+                    : isSelectMode
+                      ? 'No questions available'
+                      : 'No questions yet'
+              }
+              description={
+                isJobMode
+                  ? 'This generation job did not create any questions.'
+                  : hasActiveFilters
+                    ? 'Try adjusting your search or filters.'
+                    : isSelectMode
+                      ? 'No questions are available for this exam class and subject.'
+                      : 'Add a question manually or generate questions from Exam.'
+              }
+              action={
+                !isSelectMode && !hasActiveFilters && !isJobMode ? (
+                  <Box className="d-flex flex-wrap justify-content-center gap-2">
+                    <Button type="button" onClick={openCreate}>
+                      Add Question
+                    </Button>
+                    <Button
+                      as={Link}
+                      to="/exams/generate"
+                      variant="outline-secondary"
+                    >
+                      Generate Questions
+                    </Button>
+                  </Box>
+                ) : null
+              }
+            />
           )}
 
           {showTable && (
             <>
               <Box className="table-responsive">
-                <table className="table table-hover align-middle mb-0">
+                <table className="table table-hover align-middle mb-0 sc-table">
                   <thead>
                     <tr>
                       <th scope="col" style={{ width: '2.5rem' }}>
@@ -604,7 +633,9 @@ export default function QuestionBank() {
                             aria-busy="true"
                           >
                             <Spinner label="Loading questions…" />
-                            <span className="text-muted">Loading questions…</span>
+                            <span className="text-muted">
+                              Loading questions…
+                            </span>
                           </Box>
                         </td>
                       </tr>
@@ -643,7 +674,7 @@ export default function QuestionBank() {
                             )}
                           </td>
                           <td>
-                            {TYPE_LABELS[question.question_type] ||
+                            {QUESTION_TYPE_LABELS[question.question_type] ||
                               question.question_type}
                           </td>
                           <td>{question.marks}</td>
@@ -673,10 +704,7 @@ export default function QuestionBank() {
       </Card>
 
       {isSelectMode && (
-        <Box
-          className="position-fixed bottom-0 end-0 border-top bg-white shadow-sm"
-          style={{ zIndex: 1030, left: 220 }}
-        >
+        <Box className="sc-sticky-action-bar">
           <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 px-4 py-3">
             <Box>
               <span className="fw-semibold">{selectedCount}</span> question
@@ -703,7 +731,9 @@ export default function QuestionBank() {
                 disabled={selectedCount === 0 || submitStatus === 'submitting'}
                 onClick={handleAddToExam}
               >
-                {submitStatus === 'submitting' ? 'Adding…' : 'Continue →'}
+                {submitStatus === 'submitting'
+                  ? 'Adding…'
+                  : 'Continue to paper'}
               </Button>
             </Box>
           </Box>

@@ -7,7 +7,7 @@ import { z } from 'zod'
 import { listDocuments } from '../../api/documents'
 import { createQuestionGenerationJob } from '../../api/questionGeneration'
 import { useCatalog } from '../../contexts/CatalogContext'
-import { applyApiErrors } from '../../utils/apiErrors'
+import { applyApiErrors, getApiErrorMessage } from '../../utils/apiErrors'
 import {
   Alert,
   Box,
@@ -66,7 +66,8 @@ export default function QuestionGenerationForm() {
   const navigate = useNavigate()
   const { grades, subjects } = useCatalog()
   const [documents, setDocuments] = useState([])
-  const [submitError, setSubmitError] = useState(null)
+  const [documentsStatus, setDocumentsStatus] = useState('loading')
+  const [documentsError, setDocumentsError] = useState(null)
 
   const {
     register,
@@ -96,11 +97,20 @@ export default function QuestionGenerationForm() {
     let cancelled = false
 
     async function loadDocuments() {
+      setDocumentsStatus('loading')
+      setDocumentsError(null)
       try {
         const { data } = await listDocuments()
-        if (!cancelled) setDocuments(Array.isArray(data) ? data : [])
-      } catch {
-        if (!cancelled) setDocuments([])
+        if (cancelled) return
+        setDocuments(Array.isArray(data) ? data : [])
+        setDocumentsStatus('ready')
+      } catch (err) {
+        if (cancelled) return
+        setDocuments([])
+        setDocumentsError(
+          getApiErrorMessage(err, 'Failed to load documents'),
+        )
+        setDocumentsStatus('error')
       }
     }
 
@@ -111,8 +121,6 @@ export default function QuestionGenerationForm() {
   }, [])
 
   const onSubmit = async (values) => {
-    setSubmitError(null)
-
     const payload = {
       grade: values.grade,
       subject: values.subject,
@@ -130,13 +138,9 @@ export default function QuestionGenerationForm() {
         state: { job: data },
       })
     } catch (err) {
-      applyApiErrors(err, setError)
-      setSubmitError(
-        err.response?.data?.detail ||
-          err.response?.data?.error ||
-          err.message ||
-          null,
-      )
+      applyApiErrors(err, setError, {
+        question_types: 'mcq',
+      })
     }
   }
 
@@ -152,172 +156,174 @@ export default function QuestionGenerationForm() {
   const isBusy = isSubmitting
 
   return (
-    <Box>
-      {submitError && (
-        <Alert variant="danger" className="mb-3">
-          {submitError}
-        </Alert>
-      )}
-
-      <form onSubmit={handleSubmit(onSubmit)} noValidate>
-        <Box className="row g-3">
-          <FormField
-            id="gen-grade"
-            label="Class"
-            error={errors.grade?.message}
-            className="col-sm-6 col-lg-3"
-          >
-            <Select disabled={isBusy} {...register('grade')}>
-              <option value=""> </option>
-              {grades.map((g) => (
-                <option key={g.id} value={g.id}>
-                  {g.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-
-          <FormField
-            id="gen-subject"
-            label="Subject"
-            error={errors.subject?.message}
-            className="col-sm-6 col-lg-3"
-          >
-            <Select disabled={isBusy} {...register('subject')}>
-              <option value=""> </option>
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-
-          <FormField
-            id="gen-difficulty"
-            label="Difficulty"
-            error={errors.difficulty?.message}
-            className="col-sm-6 col-lg-3"
-          >
-            <Select disabled={isBusy} {...register('difficulty')}>
-              <option value=""> </option>
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </Select>
-          </FormField>
-
-          <FormField
-            id="gen-total-marks"
-            label="Total marks"
-            error={errors.total_marks?.message}
-            className="col-sm-6 col-lg-3"
-          >
-            <IntegerInput
-              min={1}
-              disabled={isBusy}
-              {...register('total_marks')}
-            />
-          </FormField>
-        </Box>
-
-        <p className="form-label mb-2">Question counts</p>
-        <Box className="row g-3">
-          <FormField
-            id="gen-mcq"
-            label="MCQ"
-            error={errors.mcq?.message}
-            className="col-sm-4"
-          >
-            <IntegerInput min={0} disabled={isBusy} {...register('mcq')} />
-          </FormField>
-          <FormField
-            id="gen-short"
-            label="Short"
-            error={errors.short?.message}
-            className="col-sm-4"
-          >
-            <IntegerInput min={0} disabled={isBusy} {...register('short')} />
-          </FormField>
-          <FormField
-            id="gen-long"
-            label="Long"
-            error={errors.long?.message}
-            className="col-sm-4"
-          >
-            <IntegerInput min={0} disabled={isBusy} {...register('long')} />
-          </FormField>
-        </Box>
-
+    <form onSubmit={handleSubmit(onSubmit)} noValidate>
+      <Box className="row g-3">
         <FormField
-          id="gen-description"
-          label="Description (optional)"
-          error={errors.description?.message}
+          id="gen-grade"
+          label="Class"
+          error={errors.grade?.message}
+          className="col-sm-6 col-lg-3"
         >
-          <Textarea disabled={isBusy} {...register('description')} />
+          <Select disabled={isBusy} {...register('grade')}>
+            <option value="">Select class</option>
+            {grades.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+              </option>
+            ))}
+          </Select>
         </FormField>
 
-        <Box className="mb-3">
-          <p className="form-label mb-2">Documents (optional)</p>
-          {errors.document_ids?.message && (
-            <div className="invalid-feedback d-block mb-2">
-              {errors.document_ids.message}
-            </div>
-          )}
-          {!selectedGrade || !selectedSubject ? (
-            <p className="text-muted small mb-0">
-              Select class and subject to see ready documents.
-            </p>
-          ) : readyDocuments.length === 0 ? (
-            <p className="text-muted small mb-0">
-              No ready documents for this class and subject.
-            </p>
-          ) : (
-            <Controller
-              name="document_ids"
-              control={control}
-              render={({ field }) => (
-                <Box className="d-flex flex-column gap-2">
-                  {readyDocuments.map((doc) => {
-                    const checked = field.value.includes(doc.id)
-                    return (
-                      <div className="form-check" key={doc.id}>
-                        <input
-                          className="form-check-input"
-                          type="checkbox"
-                          id={`doc-${doc.id}`}
-                          disabled={isBusy}
-                          checked={checked}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              field.onChange([...field.value, doc.id])
-                            } else {
-                              field.onChange(
-                                field.value.filter((id) => id !== doc.id),
-                              )
-                            }
-                          }}
-                        />
-                        <label className="form-check-label" htmlFor={`doc-${doc.id}`}>
-                          {doc.title}
-                        </label>
-                      </div>
-                    )
-                  })}
-                </Box>
-              )}
-            />
-          )}
-        </Box>
+        <FormField
+          id="gen-subject"
+          label="Subject"
+          error={errors.subject?.message}
+          className="col-sm-6 col-lg-3"
+        >
+          <Select disabled={isBusy} {...register('subject')}>
+            <option value="">Select subject</option>
+            {subjects.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
+        </FormField>
 
-        <FormRootError message={errors.root?.message} />
+        <FormField
+          id="gen-difficulty"
+          label="Difficulty"
+          error={errors.difficulty?.message}
+          className="col-sm-6 col-lg-3"
+        >
+          <Select disabled={isBusy} {...register('difficulty')}>
+            <option value="">Select difficulty</option>
+            <option value="easy">Easy</option>
+            <option value="medium">Medium</option>
+            <option value="hard">Hard</option>
+          </Select>
+        </FormField>
 
-        <Box className="d-flex gap-2">
-          <Button type="submit" disabled={isBusy}>
-            {isBusy ? 'Starting…' : 'Generate questions'}
-          </Button>
-        </Box>
-      </form>
-    </Box>
+        <FormField
+          id="gen-total-marks"
+          label="Total marks"
+          error={errors.total_marks?.message}
+          className="col-sm-6 col-lg-3"
+        >
+          <IntegerInput
+            min={1}
+            disabled={isBusy}
+            {...register('total_marks')}
+          />
+        </FormField>
+      </Box>
+
+      <p className="sc-section-title">Question counts</p>
+      <Box className="row g-3">
+        <FormField
+          id="gen-mcq"
+          label="MCQ"
+          error={errors.mcq?.message}
+          className="col-sm-4"
+        >
+          <IntegerInput min={0} disabled={isBusy} {...register('mcq')} />
+        </FormField>
+        <FormField
+          id="gen-short"
+          label="Short"
+          error={errors.short?.message}
+          className="col-sm-4"
+        >
+          <IntegerInput min={0} disabled={isBusy} {...register('short')} />
+        </FormField>
+        <FormField
+          id="gen-long"
+          label="Long"
+          error={errors.long?.message}
+          className="col-sm-4"
+        >
+          <IntegerInput min={0} disabled={isBusy} {...register('long')} />
+        </FormField>
+      </Box>
+
+      <FormField
+        id="gen-description"
+        label="Description (optional)"
+        error={errors.description?.message}
+      >
+        <Textarea disabled={isBusy} {...register('description')} />
+      </FormField>
+
+      <Box className="mb-3">
+        <p className="form-label mb-2">Documents (optional)</p>
+        {errors.document_ids?.message && (
+          <div className="invalid-feedback d-block mb-2">
+            {errors.document_ids.message}
+          </div>
+        )}
+        {documentsStatus === 'error' && (
+          <Alert variant="warning" className="mb-2 py-2">
+            {documentsError} You can still generate without documents.
+          </Alert>
+        )}
+        {!selectedGrade || !selectedSubject ? (
+          <p className="text-muted small mb-0">
+            Select class and subject to see ready documents.
+          </p>
+        ) : documentsStatus === 'loading' ? (
+          <p className="text-muted small mb-0">Loading documents…</p>
+        ) : readyDocuments.length === 0 ? (
+          <p className="text-muted small mb-0">
+            No ready documents for this class and subject.
+          </p>
+        ) : (
+          <Controller
+            name="document_ids"
+            control={control}
+            render={({ field }) => (
+              <Box className="d-flex flex-column gap-2">
+                {readyDocuments.map((doc) => {
+                  const checked = field.value.includes(doc.id)
+                  return (
+                    <div className="form-check" key={doc.id}>
+                      <input
+                        className="form-check-input"
+                        type="checkbox"
+                        id={`doc-${doc.id}`}
+                        disabled={isBusy}
+                        checked={checked}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            field.onChange([...field.value, doc.id])
+                          } else {
+                            field.onChange(
+                              field.value.filter((id) => id !== doc.id),
+                            )
+                          }
+                        }}
+                      />
+                      <label
+                        className="form-check-label"
+                        htmlFor={`doc-${doc.id}`}
+                      >
+                        {doc.title}
+                      </label>
+                    </div>
+                  )
+                })}
+              </Box>
+            )}
+          />
+        )}
+      </Box>
+
+      <FormRootError message={errors.root?.message} />
+
+      <Box className="d-flex gap-2">
+        <Button type="submit" disabled={isBusy}>
+          {isBusy ? 'Starting…' : 'Generate questions'}
+        </Button>
+      </Box>
+    </form>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 
 import { getQuestionGenerationJob } from '../api/questionGeneration'
+import { getApiErrorMessage } from '../utils/apiErrors'
 
 const JOB_POLL_INTERVAL_MS = 2000
 
@@ -10,13 +11,6 @@ function isMatchingJob(jobId, job) {
   return job != null && jobId != null && String(job.id) === String(jobId)
 }
 
-/**
- * Poll a question-generation job until it completes or fails.
- * Cleans up the timer on unmount / jobId change. No duplicate intervals.
- *
- * @param {string|number|null|undefined} jobId
- * @param {object|null|undefined} initialJob Optional job payload from navigate state
- */
 export default function useQuestionGenerationJob(jobId, initialJob = null) {
   const seededJob = isMatchingJob(jobId, initialJob) ? initialJob : null
 
@@ -43,7 +37,6 @@ export default function useQuestionGenerationJob(jobId, initialJob = null) {
     let cancelled = false
     let timerId
 
-    // Keep seeded job for first paint; don't reset to blank "loading".
     if (!isMatchingJob(jobId, job)) {
       setJob(null)
       setStatus('loading')
@@ -73,10 +66,7 @@ export default function useQuestionGenerationJob(jobId, initialJob = null) {
         setStatus('error')
         setJob(null)
         setError(
-          err.response?.data?.detail ||
-            err.response?.data?.error ||
-            err.message ||
-            'Failed to check generation status',
+          getApiErrorMessage(err, 'Failed to check generation status'),
         )
       }
     }

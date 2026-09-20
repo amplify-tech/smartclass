@@ -1,13 +1,21 @@
 import QuestionGenerationForm from '../components/exams/QuestionGenerationForm'
-import { Box, Card, CardBody } from '../components/common_ui'
+import { Box, Card, CardBody, PageHeader } from '../components/common_ui'
 
 export default function GenerateQuestionsPage() {
   return (
     <Box>
-      <h1 className="h4 mb-4">Generate Questions</h1>
+      <PageHeader
+        breadcrumbs={[
+          { label: 'Home', to: '/' },
+          { label: 'Exams', to: '/exams' },
+          { label: 'Generate Questions' },
+        ]}
+        title="Generate Questions"
+        description="Create AI-assisted questions for a class and subject. Progress appears under Pending Tasks."
+      />
 
-      <Card className="position-relative overflow-hidden w-100">
-        <CardBody className="p-4">
+      <Card>
+        <CardBody className="sc-card-body">
           <QuestionGenerationForm />
         </CardBody>
       </Card>

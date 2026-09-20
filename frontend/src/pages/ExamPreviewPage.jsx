@@ -4,12 +4,14 @@ import { Link, useParams } from 'react-router-dom'
 import { getExam } from '../api/exams'
 import ExamPrintPreview from '../components/exams/ExamPrintPreview'
 import {
-  Alert,
   Box,
   Button,
-  Spinner,
+  ErrorPanel,
+  LoadingBlock,
+  PageHeader,
 } from '../components/common_ui'
 import { useCatalog } from '../contexts/CatalogContext'
+import { getApiErrorMessage } from '../utils/apiErrors'
 
 export default function ExamPreviewPage() {
   const { examId } = useParams()
@@ -40,12 +42,7 @@ export default function ExamPreviewPage() {
       setStatus('ready')
     } catch (err) {
       setExam(null)
-      setError(
-        err.response?.data?.detail ||
-          err.response?.data?.error ||
-          err.message ||
-          'Failed to load exam',
-      )
+      setError(getApiErrorMessage(err, 'Failed to load exam'))
       setStatus('error')
     }
   }, [examId])
@@ -64,20 +61,25 @@ export default function ExamPreviewPage() {
     }
   }, [exam?.title, subjectName, gradeName])
 
-  const handlePrint = () => {
-    window.print()
-  }
+  const editPath = examId
+    ? `/exams/${encodeURIComponent(examId)}/build`
+    : '/exams'
 
-  const handleDownloadPdf = () => {
-    // Browser print dialog → choose "Save as PDF"
-    window.print()
-  }
+  const breadcrumbs = [
+    { label: 'Home', to: '/' },
+    { label: 'Exams', to: '/exams' },
+    {
+      label: exam?.title || 'Exam',
+      to: editPath,
+    },
+    { label: 'Preview' },
+  ]
 
   if (status === 'loading') {
     return (
-      <Box className="d-flex align-items-center gap-2 py-5 justify-content-center d-print-none">
-        <Spinner label="Loading exam preview…" />
-        <span className="text-muted">Loading exam preview…</span>
+      <Box className="d-print-none">
+        <PageHeader breadcrumbs={breadcrumbs} title="Exam Preview" />
+        <LoadingBlock label="Loading exam preview…" />
       </Box>
     )
   }
@@ -85,51 +87,49 @@ export default function ExamPreviewPage() {
   if (status === 'error') {
     return (
       <Box className="d-print-none">
-        <Button
-          as={Link}
-          to={`/exams/${encodeURIComponent(examId)}/build`}
-          variant="link"
-          className="px-0 mb-3"
-        >
-          ← Edit Exam
-        </Button>
-        <Alert variant="danger" className="mb-3">
-          {error}
-        </Alert>
-        <Button type="button" onClick={loadExam}>
-          Try again
-        </Button>
+        <PageHeader breadcrumbs={breadcrumbs} title="Exam Preview" />
+        <ErrorPanel message={error} onRetry={loadExam}>
+          <Button as={Link} to={editPath} variant="outline-secondary">
+            Edit Exam
+          </Button>
+        </ErrorPanel>
       </Box>
     )
   }
 
-  const editPath = `/exams/${encodeURIComponent(examId)}/build`
-
   return (
-    <ExamPrintPreview
-      exam={exam}
-      gradeName={gradeName}
-      subjectName={subjectName}
-      toolbar={
-        <>
-          <Button as={Link} to={editPath} variant="link" className="px-0">
-            ← Edit Exam
-          </Button>
-          <Box className="exam-print-preview__toolbar-actions">
-            <Button
-              type="button"
-              variant="outline-secondary"
-              onClick={handleDownloadPdf}
-              title='Opens print dialog — choose "Save as PDF"'
-            >
-              Download PDF
-            </Button>
-            <Button type="button" onClick={handlePrint}>
-              Print
-            </Button>
-          </Box>
-        </>
-      }
-    />
+    <Box>
+      <Box className="d-print-none">
+        <PageHeader
+          breadcrumbs={breadcrumbs}
+          title="Exam Preview"
+          description="Print or save as PDF from your browser print dialog."
+          actions={
+            <Box className="d-flex flex-wrap gap-2">
+              <Button as={Link} to={editPath} variant="outline-secondary">
+                Edit Exam
+              </Button>
+              <Button
+                type="button"
+                variant="outline-secondary"
+                onClick={() => window.print()}
+                title='Opens print dialog — choose "Save as PDF"'
+              >
+                Download PDF
+              </Button>
+              <Button type="button" onClick={() => window.print()}>
+                Print
+              </Button>
+            </Box>
+          }
+        />
+      </Box>
+
+      <ExamPrintPreview
+        exam={exam}
+        gradeName={gradeName}
+        subjectName={subjectName}
+      />
+    </Box>
   )
 }

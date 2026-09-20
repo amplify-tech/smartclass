@@ -3,54 +3,32 @@ import { Link, useNavigate } from 'react-router-dom'
 
 import { listQuestionGenerationJobs } from '../api/questionGeneration'
 import {
-  Alert,
   Box,
   Button,
   Card,
   CardBody,
+  EmptyState,
+  ErrorPanel,
+  LoadingBlock,
+  PageHeader,
   Select,
-  Spinner,
+  StatusBadge,
 } from '../components/common_ui'
 import { useCatalog } from '../contexts/CatalogContext'
-
-const STATUS_LABELS = {
-  pending: 'Pending',
-  running: 'Running',
-  completed: 'Completed',
-  failed: 'Failed',
-}
-
-const STATUS_BADGE = {
-  pending: 'text-bg-warning',
-  running: 'text-bg-info',
-  completed: 'text-bg-success',
-  failed: 'text-bg-danger',
-}
-
-const DIFFICULTY_LABELS = {
-  easy: 'Easy',
-  medium: 'Medium',
-  hard: 'Hard',
-}
-
-const TYPE_LABELS = {
-  mcq: 'MCQ',
-  short: 'Short',
-  long: 'Long',
-}
-
-function formatDate(value) {
-  if (!value) return '—'
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) return '—'
-  return date.toLocaleString()
-}
+import { getApiErrorMessage } from '../utils/apiErrors'
+import {
+  DIFFICULTY_LABELS,
+  JOB_STATUS_LABELS,
+  JOB_STATUS_TONE,
+  QUESTION_TYPE_LABELS,
+} from '../utils/examLabels'
+import { formatDateTime } from '../utils/formatDate'
 
 function questionTypesSummary(questionTypes) {
   if (!questionTypes || typeof questionTypes !== 'object') return '—'
   const parts = Object.entries(questionTypes)
     .filter(([, count]) => Number(count) > 0)
-    .map(([type, count]) => `${TYPE_LABELS[type] || type}: ${count}`)
+    .map(([type, count]) => `${QUESTION_TYPE_LABELS[type] || type}: ${count}`)
   return parts.length ? parts.join(', ') : '—'
 }
 
@@ -89,12 +67,7 @@ export default function PendingTasksPage() {
       setStatus('ready')
     } catch (err) {
       setJobs([])
-      setError(
-        err.response?.data?.detail ||
-          err.response?.data?.error ||
-          err.message ||
-          'Failed to load generation jobs',
-      )
+      setError(getApiErrorMessage(err, 'Failed to load generation jobs'))
       setStatus('error')
     }
   }, [])
@@ -113,15 +86,33 @@ export default function PendingTasksPage() {
 
   return (
     <Box>
-      <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
-        <h1 className="h4 mb-0">Pending Tasks</h1>
-        <Button as={Link} to="/exams/generate" variant="outline-secondary">
-          + Generate Questions
-        </Button>
-      </Box>
+      <PageHeader
+        breadcrumbs={[
+          { label: 'Home', to: '/' },
+          { label: 'Exams', to: '/exams' },
+          { label: 'Pending Tasks' },
+        ]}
+        title="Pending Tasks"
+        description="Track question generation jobs and open results when they finish."
+        actions={
+          <Box className="d-flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline-secondary"
+              onClick={loadJobs}
+              disabled={status === 'loading'}
+            >
+              Refresh
+            </Button>
+            <Button as={Link} to="/exams/generate">
+              Generate Questions
+            </Button>
+          </Box>
+        }
+      />
 
       <Card>
-        <CardBody className="p-4">
+        <CardBody className="sc-card-body">
           <Box className="row g-2 mb-3">
             <Box className="col-6 col-md-3">
               <Select
@@ -139,35 +130,37 @@ export default function PendingTasksPage() {
             </Box>
           </Box>
 
-          {status === 'loading' && (
-            <Box className="d-flex align-items-center gap-2 py-5 justify-content-center">
-              <Spinner label="Loading tasks…" />
-              <span className="text-muted">Loading tasks…</span>
-            </Box>
-          )}
+          {status === 'loading' && <LoadingBlock label="Loading tasks…" />}
 
           {status === 'error' && (
-            <Box className="py-3">
-              <Alert variant="danger" className="mb-3">
-                {error}
-              </Alert>
-              <Button type="button" onClick={loadJobs}>
-                Try again
-              </Button>
-            </Box>
+            <ErrorPanel message={error} onRetry={loadJobs} />
           )}
 
           {status === 'ready' && filteredJobs.length === 0 && (
-            <p className="text-muted text-center py-5 mb-0">
-              {jobs.length === 0
-                ? 'No generation jobs yet. Start one from Generate Questions.'
-                : 'No jobs match this status filter.'}
-            </p>
+            <EmptyState
+              title={
+                jobs.length === 0
+                  ? 'No generation jobs yet'
+                  : 'No jobs match this filter'
+              }
+              description={
+                jobs.length === 0
+                  ? 'Start a job from Generate Questions to create bank items automatically.'
+                  : 'Try another status filter or refresh the list.'
+              }
+              action={
+                jobs.length === 0 ? (
+                  <Button as={Link} to="/exams/generate">
+                    Generate Questions
+                  </Button>
+                ) : null
+              }
+            />
           )}
 
           {status === 'ready' && filteredJobs.length > 0 && (
             <Box className="table-responsive">
-              <table className="table table-hover align-middle mb-0">
+              <table className="table table-hover align-middle mb-0 sc-table">
                 <thead>
                   <tr>
                     <th scope="col">Job</th>
@@ -211,11 +204,11 @@ export default function PendingTasksPage() {
                         </Link>
                       </td>
                       <td>
-                        <span
-                          className={`badge ${STATUS_BADGE[job.status] || 'text-bg-secondary'}`}
+                        <StatusBadge
+                          tone={JOB_STATUS_TONE[job.status] || 'secondary'}
                         >
-                          {STATUS_LABELS[job.status] || job.status || '—'}
-                        </span>
+                          {JOB_STATUS_LABELS[job.status] || job.status || '—'}
+                        </StatusBadge>
                         {job.status === 'failed' && job.error_message ? (
                           <Box
                             as="span"
@@ -245,10 +238,10 @@ export default function PendingTasksPage() {
                           : 0}
                       </td>
                       <td className="text-nowrap small text-muted">
-                        {formatDate(job.created_at)}
+                        {formatDateTime(job.created_at)}
                       </td>
                       <td className="text-nowrap small text-muted">
-                        {formatDate(job.completed_at)}
+                        {formatDateTime(job.completed_at)}
                       </td>
                     </tr>
                   ))}

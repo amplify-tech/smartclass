@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { createLabel } from '../../api/labels'
 import { createQuestion, updateQuestion } from '../../api/questions'
 import { useCatalog } from '../../contexts/CatalogContext'
-import { applyApiErrors } from '../../utils/apiErrors'
+import { applyApiErrors, getApiErrorMessage } from '../../utils/apiErrors'
 import {
   Box,
   Button,
@@ -232,12 +232,7 @@ export default function QuestionFormDrawer({
       setNewLabelName('')
       return data
     } catch (err) {
-      const message =
-        err.response?.data?.name?.[0] ||
-        err.response?.data?.error ||
-        err.message ||
-        'Could not create topic'
-      setLabelError(message)
+      setLabelError(getApiErrorMessage(err, 'Could not create topic'))
       return null
     } finally {
       setAddingLabel(false)
@@ -297,7 +292,7 @@ export default function QuestionFormDrawer({
             className="col-sm-6"
           >
             <Select {...register('question_type')}>
-              <option value=""> </option>
+              <option value="">Select type</option>
               <option value="mcq">MCQ</option>
               <option value="short">Short</option>
               <option value="long">Long</option>
@@ -322,7 +317,7 @@ export default function QuestionFormDrawer({
             className="col-sm-6"
           >
             <Select {...register('grade')}>
-              <option value=""> </option>
+              <option value="">Select class</option>
               {grades.map((grade) => (
                 <option key={grade.id} value={grade.id}>
                   {grade.name}
@@ -338,7 +333,7 @@ export default function QuestionFormDrawer({
             className="col-sm-6"
           >
             <Select {...register('subject')}>
-              <option value=""> </option>
+              <option value="">Select subject</option>
               {subjects.map((subject) => (
                 <option key={subject.id} value={subject.id}>
                   {subject.name}
@@ -369,7 +364,7 @@ export default function QuestionFormDrawer({
               error={errors.correct_answer?.message}
             >
               <Select {...register('correct_answer')}>
-                <option value=""> </option>
+                <option value="">Select answer</option>
                 {OPTION_KEYS.map((key) => (
                   <option key={key} value={key}>
                     {key}
@@ -503,7 +498,7 @@ export default function QuestionFormDrawer({
           error={errors.difficulty?.message}
         >
           <Select {...register('difficulty')}>
-            <option value=""> </option>
+            <option value="">Select difficulty</option>
             <option value="easy">Easy</option>
             <option value="medium">Medium</option>
             <option value="hard">Hard</option>
