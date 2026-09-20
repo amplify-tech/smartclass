@@ -54,8 +54,12 @@ function questionTypesSummary(questionTypes) {
   return parts.length ? parts.join(', ') : '—'
 }
 
-function jobBankPath(jobId) {
-  return `/exams/question-bank?jobId=${encodeURIComponent(jobId)}`
+function jobStatusPath(job) {
+  const id = encodeURIComponent(job.id)
+  if (job.status === 'completed') {
+    return `/exams/question-bank?jobId=${id}`
+  }
+  return `/generation-tasks/${id}`
 }
 
 export default function PendingTasksPage() {
@@ -189,17 +193,17 @@ export default function PendingTasksPage() {
                       role="link"
                       tabIndex={0}
                       style={{ cursor: 'pointer' }}
-                      onClick={() => navigate(jobBankPath(job.id))}
+                      onClick={() => navigate(jobStatusPath(job))}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault()
-                          navigate(jobBankPath(job.id))
+                          navigate(jobStatusPath(job))
                         }
                       }}
                     >
                       <td>
                         <Link
-                          to={jobBankPath(job.id)}
+                          to={jobStatusPath(job)}
                           className="link-dark text-decoration-none fw-semibold"
                           onClick={(e) => e.stopPropagation()}
                         >

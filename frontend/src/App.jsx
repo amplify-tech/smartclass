@@ -11,6 +11,7 @@ import ExamPaperBuilderPage from './pages/ExamPaperBuilderPage'
 import ExamPreviewPage from './pages/ExamPreviewPage'
 import ExamsPage from './pages/ExamsPage'
 import GenerateQuestionsPage from './pages/GenerateQuestionsPage'
+import GenerationTaskPage from './pages/GenerationTaskPage'
 import HomePage from './pages/HomePage'
 import PendingTasksPage from './pages/PendingTasksPage'
 import PptsPage from './pages/PptsPage'
@@ -48,6 +49,10 @@ function App() {
             <Route path="/exams" element={<ExamsPage />} />
             <Route path="/exams/question-bank" element={<QuestionBankPage />} />
             <Route path="/exams/generate" element={<GenerateQuestionsPage />} />
+            <Route
+              path="/generation-tasks/:taskId"
+              element={<GenerationTaskPage />}
+            />
             <Route path="/exams/pending-tasks" element={<PendingTasksPage />} />
             <Route path="/exams/create" element={<CreateExamPage />} />
             <Route path="/exams/:examId/build" element={<ExamPaperBuilderPage />} />

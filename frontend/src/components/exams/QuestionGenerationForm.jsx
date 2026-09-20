@@ -16,7 +16,6 @@ import {
   FormRootError,
   IntegerInput,
   Select,
-  Spinner,
   Textarea,
 } from '../common_ui'
 
@@ -126,9 +125,10 @@ export default function QuestionGenerationForm() {
 
     try {
       const { data } = await createQuestionGenerationJob(payload)
-      navigate(
-        `/exams/question-bank?jobId=${encodeURIComponent(data.id)}`,
-      )
+      navigate(`/generation-tasks/${encodeURIComponent(data.id)}`, {
+        replace: true,
+        state: { job: data },
+      })
     } catch (err) {
       applyApiErrors(err, setError)
       setSubmitError(
@@ -152,19 +152,7 @@ export default function QuestionGenerationForm() {
   const isBusy = isSubmitting
 
   return (
-    <Box className="position-relative">
-      {isBusy && (
-        <Box
-          className="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column align-items-center justify-content-center gap-3 bg-white bg-opacity-75 rounded"
-          style={{ zIndex: 2 }}
-          aria-live="polite"
-          aria-busy="true"
-        >
-          <Spinner label="Starting generation…" />
-          <p className="text-muted mb-0">Starting generation…</p>
-        </Box>
-      )}
-
+    <Box>
       {submitError && (
         <Alert variant="danger" className="mb-3">
           {submitError}

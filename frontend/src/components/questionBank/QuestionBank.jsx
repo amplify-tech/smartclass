@@ -3,7 +3,6 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
 import { addExamQuestions, getExam } from '../../api/exams'
 import { listLabels } from '../../api/labels'
-import { getQuestionGenerationJob } from '../../api/questionGeneration'
 import { listQuestions } from '../../api/questions'
 import { useCatalog } from '../../contexts/CatalogContext'
 import {
@@ -31,7 +30,6 @@ const TYPE_LABELS = {
 }
 
 const SEARCH_DEBOUNCE_MS = 300
-const JOB_POLL_INTERVAL_MS = 2000
 
 function truncate(text, max = 80) {
   const value = String(text || '').trim()
@@ -58,11 +56,6 @@ export default function QuestionBank() {
     isSelectMode ? 'loading' : 'ready',
   )
   const [examError, setExamError] = useState(null)
-
-  const [jobStatus, setJobStatus] = useState(jobId ? 'loading' : 'idle')
-  const [jobError, setJobError] = useState(null)
-  const [jobReady, setJobReady] = useState(!jobId)
-  const [generatedCount, setGeneratedCount] = useState(null)
 
   const [questions, setQuestions] = useState([])
   const [labels, setLabels] = useState([])
@@ -92,8 +85,6 @@ export default function QuestionBank() {
   const [editingQuestion, setEditingQuestion] = useState(null)
 
   const isJobMode = Boolean(jobId)
-  const isGenerating =
-    isJobMode && (jobStatus === 'loading' || jobStatus === 'pending' || jobStatus === 'running')
 
   const gradeName = useMemo(() => {
     if (!exam) return ''
@@ -106,71 +97,6 @@ export default function QuestionBank() {
     const match = subjects.find((s) => Number(s.id) === Number(exam.subject))
     return match?.name || ''
   }, [exam, subjects])
-
-  // Poll generation job when arriving with ?jobId=
-  useEffect(() => {
-    if (!jobId) {
-      setJobStatus('idle')
-      setJobError(null)
-      setJobReady(true)
-      setGeneratedCount(null)
-      return undefined
-    }
-
-    let cancelled = false
-    let timerId
-
-    setJobReady(false)
-    setJobStatus('loading')
-    setJobError(null)
-    setGeneratedCount(null)
-    setQuestions([])
-    setPage(1)
-
-    async function poll() {
-      try {
-        const { data } = await getQuestionGenerationJob(jobId)
-        if (cancelled) return
-
-        setSubjectFilter(String(data.subject ?? ''))
-        setGradeFilter(String(data.grade ?? ''))
-        setDifficultyFilter(String(data.difficulty ?? ''))
-        setJobStatus(data.status)
-
-        if (data.status === 'completed') {
-          setJobError(null)
-          setGeneratedCount(data.question_ids?.length ?? 0)
-          setJobReady(true)
-          return
-        }
-
-        if (data.status === 'failed') {
-          setJobError(data.error_message || 'Question generation failed')
-          setJobReady(false)
-          return
-        }
-
-        timerId = setTimeout(poll, JOB_POLL_INTERVAL_MS)
-      } catch (err) {
-        if (cancelled) return
-        setJobStatus('error')
-        setJobReady(false)
-        setJobError(
-          err.response?.data?.detail ||
-            err.response?.data?.error ||
-            err.message ||
-            'Failed to check generation status',
-        )
-      }
-    }
-
-    poll()
-
-    return () => {
-      cancelled = true
-      clearTimeout(timerId)
-    }
-  }, [jobId])
 
   // Load exam when entering selection mode
   useEffect(() => {
@@ -240,7 +166,6 @@ export default function QuestionBank() {
   const loadQuestions = useCallback(
     async ({ silent = false } = {}) => {
       if (isSelectMode && examStatus !== 'ready') return
-      if (isJobMode && !jobReady) return
 
       if (!silent) {
         setStatus('loading')
@@ -280,8 +205,6 @@ export default function QuestionBank() {
     [
       isSelectMode,
       examStatus,
-      isJobMode,
-      jobReady,
       jobId,
       page,
       pageSize,
@@ -298,10 +221,6 @@ export default function QuestionBank() {
     const next = new URLSearchParams(searchParams)
     next.delete('jobId')
     setSearchParams(next, { replace: true })
-    setJobStatus('idle')
-    setJobError(null)
-    setJobReady(true)
-    setGeneratedCount(null)
     setPage(1)
   }
 
@@ -472,36 +391,9 @@ export default function QuestionBank() {
     )
   }
 
-  if (isJobMode && (jobStatus === 'failed' || jobStatus === 'error')) {
-    return (
-      <Box>
-        <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
-          <h1 className="h4 mb-0">Question Bank</h1>
-          <Button as={Link} to="/exams/generate" variant="outline-secondary">
-            + Generate Questions
-          </Button>
-        </Box>
-        <Alert variant="danger" className="mb-3">
-          {jobError || 'Question generation failed'}
-        </Alert>
-        <Box className="d-flex flex-wrap gap-2">
-          <Button as={Link} to="/exams/generate">
-            Try again
-          </Button>
-          <Button type="button" variant="outline-secondary" onClick={clearJobFilter}>
-            View all questions
-          </Button>
-        </Box>
-      </Box>
-    )
-  }
-
-  const filtersDisabled = isGenerating
   const tableColSpan = 5
   const showTable =
-    isGenerating ||
-    status === 'loading' ||
-    (status === 'ready' && questions.length > 0)
+    status === 'loading' || (status === 'ready' && questions.length > 0)
 
   return (
     <Box className={isSelectMode ? 'pb-5 mb-4' : undefined}>
@@ -531,15 +423,10 @@ export default function QuestionBank() {
         <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
           <h1 className="h4 mb-0">Question Bank</h1>
           <Box className="d-flex flex-wrap gap-2">
-            <Button
-              as={Link}
-              to="/exams/generate"
-              variant="outline-secondary"
-              disabled={isGenerating}
-            >
+            <Button as={Link} to="/exams/generate" variant="outline-secondary">
               + Generate Questions
             </Button>
-            <Button type="button" onClick={openCreate} disabled={isGenerating}>
+            <Button type="button" onClick={openCreate}>
               + Add Question
             </Button>
           </Box>
@@ -554,6 +441,25 @@ export default function QuestionBank() {
             </Alert>
           )}
 
+          {isJobMode && (
+            <Alert
+              variant="secondary"
+              className="mb-3 py-2 d-flex flex-wrap align-items-center justify-content-between gap-2"
+            >
+              <span>
+                Showing questions from generation job #{jobId}.
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline-secondary"
+                onClick={clearJobFilter}
+              >
+                View all questions
+              </Button>
+            </Alert>
+          )}
+
           <Box className="mb-3">
             <Input
               type="search"
@@ -561,7 +467,6 @@ export default function QuestionBank() {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               aria-label="Search questions"
-              disabled={filtersDisabled}
             />
           </Box>
 
@@ -573,7 +478,6 @@ export default function QuestionBank() {
                     value={subjectFilter}
                     onChange={changeFilter(setSubjectFilter)}
                     aria-label="Filter by subject"
-                    disabled={filtersDisabled}
                   >
                     <option value="">Subject</option>
                     {subjects.map((subject) => (
@@ -588,7 +492,6 @@ export default function QuestionBank() {
                     value={gradeFilter}
                     onChange={changeFilter(setGradeFilter)}
                     aria-label="Filter by class"
-                    disabled={filtersDisabled}
                   >
                     <option value="">Class</option>
                     {grades.map((grade) => (
@@ -605,7 +508,6 @@ export default function QuestionBank() {
                 value={labelFilter}
                 onChange={changeFilter(setLabelFilter)}
                 aria-label="Filter by topic"
-                disabled={filtersDisabled}
               >
                 <option value="">Topic</option>
                 {labels.map((label) => (
@@ -620,7 +522,6 @@ export default function QuestionBank() {
                 value={typeFilter}
                 onChange={changeFilter(setTypeFilter)}
                 aria-label="Filter by type"
-                disabled={filtersDisabled}
               >
                 <option value="">Type</option>
                 <option value="mcq">MCQ</option>
@@ -633,7 +534,6 @@ export default function QuestionBank() {
                 value={difficultyFilter}
                 onChange={changeFilter(setDifficultyFilter)}
                 aria-label="Filter by difficulty"
-                disabled={filtersDisabled}
               >
                 <option value="">Difficulty</option>
                 <option value="easy">Easy</option>
@@ -643,7 +543,7 @@ export default function QuestionBank() {
             </Box>
           </Box>
 
-          {!isGenerating && status === 'error' && (
+          {status === 'error' && (
             <Box className="py-3">
               <Alert variant="danger" className="mb-3">
                 {error}
@@ -654,7 +554,7 @@ export default function QuestionBank() {
             </Box>
           )}
 
-          {!isGenerating && status === 'ready' && questions.length === 0 && (
+          {status === 'ready' && questions.length === 0 && (
             <p className="text-muted text-center py-5 mb-0">
               {isJobMode
                 ? 'No questions were created for this generation job.'
@@ -679,7 +579,7 @@ export default function QuestionBank() {
                           checked={allVisibleSelected}
                           onChange={(e) => toggleSelectAll(e.target.checked)}
                           aria-label="Select all questions on this page"
-                          disabled={isGenerating || status !== 'ready'}
+                          disabled={status !== 'ready'}
                         />
                       </th>
                       <th scope="col">Question</th>
@@ -695,7 +595,7 @@ export default function QuestionBank() {
                     </tr>
                   </thead>
                   <tbody>
-                    {isGenerating || status === 'loading' ? (
+                    {status === 'loading' ? (
                       <tr>
                         <td colSpan={tableColSpan} className="border-0">
                           <Box
@@ -703,18 +603,8 @@ export default function QuestionBank() {
                             aria-live="polite"
                             aria-busy="true"
                           >
-                            <Spinner
-                              label={
-                                isGenerating
-                                  ? 'Question generating…'
-                                  : 'Loading questions…'
-                              }
-                            />
-                            <span className="text-muted">
-                              {isGenerating
-                                ? 'Question generating…'
-                                : 'Loading questions…'}
-                            </span>
+                            <Spinner label="Loading questions…" />
+                            <span className="text-muted">Loading questions…</span>
                           </Box>
                         </td>
                       </tr>
@@ -767,7 +657,7 @@ export default function QuestionBank() {
                 </table>
               </Box>
 
-              {!isGenerating && status === 'ready' && questions.length > 0 && (
+              {status === 'ready' && questions.length > 0 && (
                 <Pagination
                   className="mt-3"
                   page={page}
@@ -778,27 +668,6 @@ export default function QuestionBank() {
                 />
               )}
             </>
-          )}
-
-          {isJobMode && jobReady && (
-            <Alert
-              variant="success"
-              className="mt-3 mb-0 py-2 d-flex flex-wrap align-items-center justify-content-between gap-2"
-            >
-              <span>
-                Generated{' '}
-                {generatedCount ?? totalCount} question
-                {(generatedCount ?? totalCount) === 1 ? '' : 's'} successfully.
-              </span>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline-secondary"
-                onClick={clearJobFilter}
-              >
-                View all questions
-              </Button>
-            </Alert>
           )}
         </CardBody>
       </Card>
