@@ -1,8 +1,12 @@
+from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from config.exceptions import ConflictError
+from config.utils import parse_positive_int
 from exam.models import (
     Difficulty,
     Exam,
@@ -12,6 +16,7 @@ from exam.models import (
     QuestionGenerationJob,
     QuestionType,
 )
+from exam.permissions import IsOwnerOrReadOnly
 from exam.serializers import (
     AddExamQuestionsSerializer,
     ExamListSerializer,
@@ -20,9 +25,8 @@ from exam.serializers import (
     QuestionGenerationJobSerializer,
     QuestionSerializer,
     ReorderExamQuestionsSerializer,
-    UpdateExamQuestionSerializer,
 )
-from exam.services import QuestionGenerationService
+from exam.services import ExamService, QuestionGenerationService
 
 
 class QuestionGenerationJobViewSet(
@@ -31,14 +35,21 @@ class QuestionGenerationJobViewSet(
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,
 ):
+    """Jobs are scoped to the authenticated owner only (list + retrieve)."""
+
     serializer_class = QuestionGenerationJobSerializer
+    permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post', 'head', 'options']
     pagination_class = None
 
     def get_queryset(self):
-        return QuestionGenerationJob.objects.filter(
-            created_by=self.request.user,
-        ).select_related('grade', 'subject')
+        return (
+            QuestionGenerationJob.objects.filter(
+                created_by=self.request.user,
+            )
+            .select_related('grade', 'subject')
+            .prefetch_related('questions')
+        )
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -61,18 +72,25 @@ class LabelViewSet(
 ):
     queryset = Label.objects.all()
     serializer_class = LabelSerializer
+    permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post', 'head', 'options']
     pagination_class = None
 
 
 class QuestionViewSet(viewsets.ModelViewSet):
     serializer_class = QuestionSerializer
+    permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
 
     def get_queryset(self):
         qs = (
-            Question.objects.filter(created_by=self.request.user)
-            .select_related('grade', 'subject', 'source_document', 'generation_job')
+            Question.objects.all()
+            .select_related(
+                'grade',
+                'subject',
+                'source_document',
+                'generation_job',
+            )
             .prefetch_related('options', 'labels')
         )
 
@@ -80,7 +98,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
         search = (params.get('search') or '').strip()
         if search:
-            qs = qs.filter(text__icontains=search)
+            qs = qs.filter(text__icontains=search[:200])
 
         question_type = (params.get('question_type') or '').strip().lower()
         if question_type:
@@ -94,15 +112,28 @@ class QuestionViewSet(viewsets.ModelViewSet):
             if difficulty in valid_difficulties:
                 qs = qs.filter(difficulty=difficulty)
 
-        grade = params.get('grade')
-        if grade is not None and grade != '':
-            qs = qs.filter(grade_id=grade)
+        grade_id = parse_positive_int(params.get('grade'))
+        if grade_id is not None:
+            qs = qs.filter(grade_id=grade_id)
 
-        subject = params.get('subject')
-        if subject is not None and subject != '':
-            qs = qs.filter(subject_id=subject)
+        subject_id = parse_positive_int(params.get('subject'))
+        if subject_id is not None:
+            qs = qs.filter(subject_id=subject_id)
 
-        label_ids = params.getlist('label')
+        generation_job = params.get('generation_job') or params.get('job_id')
+        job_id = parse_positive_int(generation_job)
+        if job_id is not None:
+            # Only the job owner can filter questions by that job.
+            qs = qs.filter(
+                generation_job_id=job_id,
+                generation_job__created_by=self.request.user,
+            )
+
+        label_ids = [
+            lid
+            for lid in (parse_positive_int(v) for v in params.getlist('label'))
+            if lid is not None
+        ]
         if label_ids:
             qs = qs.filter(labels__in=label_ids).distinct()
 
@@ -111,9 +142,20 @@ class QuestionViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    def perform_destroy(self, instance):
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise ConflictError(
+                'Cannot delete a question that is used on an exam. '
+                'Remove it from exams first.',
+            )
+
 
 class ExamViewSet(viewsets.ModelViewSet):
-    http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
+    permission_classes = [IsAuthenticated]
+    # put required for reorder-questions action
+    http_method_names = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
 
     def get_serializer_class(self):
         if self.action == 'list':
@@ -125,7 +167,12 @@ class ExamViewSet(viewsets.ModelViewSet):
             'grade',
             'subject',
         )
-        if self.action == 'retrieve':
+        if self.action in (
+            'retrieve',
+            'add_questions',
+            'reorder_questions',
+            'exam_question_detail',
+        ):
             qs = qs.prefetch_related(
                 'exam_questions__question__options',
                 'exam_questions__question__labels',
@@ -135,38 +182,33 @@ class ExamViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    def _serialized_exam(self, exam):
+        exam = self.get_queryset().get(pk=exam.pk)
+        return ExamSerializer(exam).data
+
     @action(detail=True, methods=['post'], url_path='questions')
     def add_questions(self, request, pk=None):
         exam = self.get_object()
         serializer = AddExamQuestionsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # TODO: create ExamQuestion rows for validated question_ids
-        return Response(ExamSerializer(exam).data)
+        ExamService().add_questions(exam, serializer.validated_data['question_ids'])
+        return Response(self._serialized_exam(exam))
 
     @action(detail=True, methods=['put'], url_path='reorder-questions')
     def reorder_questions(self, request, pk=None):
         exam = self.get_object()
         serializer = ReorderExamQuestionsSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # TODO: update order for each item
-        return Response(ExamSerializer(exam).data)
+        ExamService().reorder_questions(exam, serializer.validated_data['items'])
+        return Response(self._serialized_exam(exam))
 
     @action(
         detail=True,
-        methods=['patch', 'delete'],
+        methods=['delete'],
         url_path=r'exam-questions/(?P<exam_question_id>[0-9]+)',
     )
     def exam_question_detail(self, request, pk=None, exam_question_id=None):
         exam = self.get_object()
         placement = get_object_or_404(ExamQuestion, pk=exam_question_id, exam=exam)
-
-        if request.method == 'DELETE':
-            placement.delete()
-            return Response(ExamSerializer(exam).data)
-
-        serializer = UpdateExamQuestionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        for key, value in serializer.validated_data.items():
-            setattr(placement, key, value)
-        placement.save()
-        return Response(ExamSerializer(exam).data)
+        ExamService().remove_placement(exam, placement)
+        return Response(self._serialized_exam(exam))

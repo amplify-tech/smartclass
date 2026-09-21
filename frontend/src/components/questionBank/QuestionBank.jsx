@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 
+import { addExamQuestions, getExam } from '../../api/exams'
 import { listLabels } from '../../api/labels'
 import { listQuestions } from '../../api/questions'
 import { useCatalog } from '../../contexts/CatalogContext'
+import { getApiErrorMessage } from '../../utils/apiErrors'
+import { QUESTION_TYPE_LABELS } from '../../utils/examLabels'
 import {
   buildListParams,
   DEFAULT_PAGE_SIZE,
@@ -15,18 +18,16 @@ import {
   Button,
   Card,
   CardBody,
+  EmptyState,
+  ErrorPanel,
   Input,
+  LoadingBlock,
+  PageHeader,
   Pagination,
   Select,
   Spinner,
 } from '../common_ui'
 import QuestionFormDrawer from './QuestionFormDrawer'
-
-const TYPE_LABELS = {
-  mcq: 'MCQ',
-  short: 'Short',
-  long: 'Long',
-}
 
 const SEARCH_DEBOUNCE_MS = 300
 
@@ -36,13 +37,25 @@ function truncate(text, max = 80) {
   return `${value.slice(0, max - 1)}…`
 }
 
-function topicsText(labels) {
+function labelsText(labels) {
   if (!labels?.length) return '—'
   return labels.map((label) => label.name).join(', ')
 }
 
 export default function QuestionBank() {
+  const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { grades, subjects } = useCatalog()
+
+  const isSelectMode = searchParams.get('mode') === 'select'
+  const examId = searchParams.get('examId')
+  const jobId = searchParams.get('jobId')
+
+  const [exam, setExam] = useState(null)
+  const [examStatus, setExamStatus] = useState(
+    isSelectMode ? 'loading' : 'ready',
+  )
+  const [examError, setExamError] = useState(null)
 
   const [questions, setQuestions] = useState([])
   const [labels, setLabels] = useState([])
@@ -53,7 +66,7 @@ export default function QuestionBank() {
   const [search, setSearch] = useState('')
   const [subjectFilter, setSubjectFilter] = useState('')
   const [gradeFilter, setGradeFilter] = useState('')
-  const [topicFilter, setTopicFilter] = useState('')
+  const [labelFilter, setLabelFilter] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [difficultyFilter, setDifficultyFilter] = useState('')
 
@@ -62,12 +75,76 @@ export default function QuestionBank() {
   const [totalCount, setTotalCount] = useState(0)
   const [totalPages, setTotalPages] = useState(1)
 
-  const [selectedIds, setSelectedIds] = useState(() => new Set())
+  const [selectedMap, setSelectedMap] = useState(() => new Map())
+  const [submitStatus, setSubmitStatus] = useState('idle')
+  const [submitError, setSubmitError] = useState(null)
+
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerMode, setDrawerMode] = useState('create')
   const [editingQuestion, setEditingQuestion] = useState(null)
 
-  // Debounce search text before hitting the API
+  const isJobMode = Boolean(jobId)
+
+  const gradeName = useMemo(() => {
+    if (!exam) return ''
+    const match = grades.find((g) => Number(g.id) === Number(exam.grade))
+    return match?.name || `Class ${exam.grade}`
+  }, [exam, grades])
+
+  const subjectName = useMemo(() => {
+    if (!exam) return ''
+    const match = subjects.find((s) => Number(s.id) === Number(exam.subject))
+    return match?.name || ''
+  }, [exam, subjects])
+
+  useEffect(() => {
+    if (!isSelectMode) {
+      setExam(null)
+      setExamStatus('ready')
+      setExamError(null)
+      setSelectedMap(new Map())
+      setSubmitError(null)
+      setSubmitStatus('idle')
+      if (!jobId) {
+        setSubjectFilter('')
+        setGradeFilter('')
+      }
+      return undefined
+    }
+
+    if (!examId) {
+      setExam(null)
+      setExamStatus('error')
+      setExamError('Missing exam id. Create an exam first.')
+      return undefined
+    }
+
+    let cancelled = false
+
+    async function loadExam() {
+      setExamStatus('loading')
+      setExamError(null)
+      try {
+        const { data } = await getExam(examId)
+        if (cancelled) return
+        setExam(data)
+        setSubjectFilter(String(data.subject ?? ''))
+        setGradeFilter(String(data.grade ?? ''))
+        setExamStatus('ready')
+      } catch (err) {
+        if (cancelled) return
+        setExam(null)
+        setExamStatus('error')
+        setExamError(getApiErrorMessage(err, 'Failed to load exam'))
+      }
+    }
+
+    loadExam()
+    return () => {
+      cancelled = true
+    }
+  }, [isSelectMode, examId, jobId])
+
   useEffect(() => {
     const timer = setTimeout(() => {
       const next = searchInput.trim()
@@ -80,6 +157,8 @@ export default function QuestionBank() {
 
   const loadQuestions = useCallback(
     async ({ silent = false } = {}) => {
+      if (isSelectMode && examStatus !== 'ready') return
+
       if (!silent) {
         setStatus('loading')
         setError(null)
@@ -91,9 +170,10 @@ export default function QuestionBank() {
         search,
         grade: gradeFilter,
         subject: subjectFilter,
-        label: topicFilter,
+        label: labelFilter,
         question_type: typeFilter,
         difficulty: difficultyFilter,
+        generation_job: jobId || undefined,
       })
 
       try {
@@ -105,26 +185,31 @@ export default function QuestionBank() {
         setStatus('ready')
         setError(null)
       } catch (err) {
-        const message =
-          err.response?.data?.detail ||
-          err.response?.data?.error ||
-          err.message ||
-          'Failed to load questions'
-        setError(message)
+        setError(getApiErrorMessage(err, 'Failed to load questions'))
         setStatus('error')
       }
     },
     [
+      isSelectMode,
+      examStatus,
+      jobId,
       page,
       pageSize,
       search,
       gradeFilter,
       subjectFilter,
-      topicFilter,
+      labelFilter,
       typeFilter,
       difficultyFilter,
     ],
   )
+
+  function clearJobFilter() {
+    const next = new URLSearchParams(searchParams)
+    next.delete('jobId')
+    setSearchParams(next, { replace: true })
+    setPage(1)
+  }
 
   const loadLabels = useCallback(async () => {
     try {
@@ -143,14 +228,29 @@ export default function QuestionBank() {
     loadQuestions()
   }, [loadQuestions])
 
-  // Drop selections that no longer exist on the current page
   useEffect(() => {
-    setSelectedIds((prev) => {
+    if (isSelectMode) return
+    setSelectedMap((prev) => {
       const ids = new Set(questions.map((q) => q.id))
-      const next = new Set([...prev].filter((id) => ids.has(id)))
+      const next = new Map()
+      for (const [id, marks] of prev) {
+        if (ids.has(id)) next.set(id, marks)
+      }
       return next.size === prev.size ? prev : next
     })
-  }, [questions])
+  }, [questions, isSelectMode])
+
+  const selectedIds = useMemo(
+    () => new Set(selectedMap.keys()),
+    [selectedMap],
+  )
+
+  const selectedCount = selectedMap.size
+  const selectedMarks = useMemo(() => {
+    let total = 0
+    for (const marks of selectedMap.values()) total += Number(marks) || 0
+    return total
+  }, [selectedMap])
 
   const allVisibleSelected =
     questions.length > 0 &&
@@ -164,10 +264,10 @@ export default function QuestionBank() {
   }
 
   function toggleSelectAll(checked) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
+    setSelectedMap((prev) => {
+      const next = new Map(prev)
       if (checked) {
-        questions.forEach((question) => next.add(question.id))
+        questions.forEach((question) => next.set(question.id, question.marks))
       } else {
         questions.forEach((question) => next.delete(question.id))
       }
@@ -175,13 +275,38 @@ export default function QuestionBank() {
     })
   }
 
-  function toggleSelectOne(id, checked) {
-    setSelectedIds((prev) => {
-      const next = new Set(prev)
-      if (checked) next.add(id)
-      else next.delete(id)
+  function toggleSelectOne(question, checked) {
+    setSelectedMap((prev) => {
+      const next = new Map(prev)
+      if (checked) next.set(question.id, question.marks)
+      else next.delete(question.id)
       return next
     })
+  }
+
+  function clearSelection() {
+    setSelectedMap(new Map())
+    setSubmitError(null)
+  }
+
+  async function handleAddToExam() {
+    if (!examId || selectedCount === 0) return
+
+    setSubmitStatus('submitting')
+    setSubmitError(null)
+
+    try {
+      await addExamQuestions(examId, {
+        question_ids: [...selectedMap.keys()],
+      })
+      setSubmitStatus('success')
+      navigate(`/exams/${encodeURIComponent(examId)}/build`)
+    } catch (err) {
+      setSubmitStatus('error')
+      setSubmitError(
+        getApiErrorMessage(err, 'Failed to add questions to exam'),
+      )
+    }
   }
 
   function openCreate() {
@@ -210,29 +335,137 @@ export default function QuestionBank() {
 
   const hasActiveFilters = Boolean(
     search ||
-      gradeFilter ||
-      subjectFilter ||
-      topicFilter ||
+      (!isSelectMode && gradeFilter) ||
+      (!isSelectMode && subjectFilter) ||
+      labelFilter ||
       typeFilter ||
-      difficultyFilter,
+      difficultyFilter ||
+      jobId,
   )
 
-  return (
-    <Box>
-      <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
-        <h1 className="h4 mb-0">Question Bank</h1>
-        <Box className="d-flex flex-wrap gap-2">
-          <Button as={Link} to="/exams" variant="outline-secondary">
-            + Generate Questions
-          </Button>
-          <Button type="button" onClick={openCreate}>
-            + Add Question
-          </Button>
-        </Box>
-      </Box>
+  const builderPath = examId
+    ? `/exams/${encodeURIComponent(examId)}/build`
+    : '/exams'
 
-      <Card>
-        <CardBody className="p-4">
+  const breadcrumbs = isSelectMode
+    ? [
+        { label: 'Home', to: '/' },
+        { label: 'Exams', to: '/exams' },
+        {
+          label: exam?.title || 'Exam',
+          to: builderPath,
+        },
+        { label: 'Select questions' },
+      ]
+    : [
+        { label: 'Home', to: '/' },
+        { label: 'Exams', to: '/exams' },
+        { label: 'Question Bank' },
+      ]
+
+  if (isSelectMode && examStatus === 'loading') {
+    return (
+      <Box>
+        <PageHeader
+          breadcrumbs={breadcrumbs}
+          title="Select Questions"
+        />
+        <LoadingBlock label="Loading exam…" />
+      </Box>
+    )
+  }
+
+  if (isSelectMode && examStatus === 'error') {
+    return (
+      <Box>
+        <PageHeader
+          breadcrumbs={[
+            { label: 'Home', to: '/' },
+            { label: 'Exams', to: '/exams' },
+            { label: 'Select questions' },
+          ]}
+          title="Select Questions"
+        />
+        <ErrorPanel message={examError}>
+          <Button as={Link} to="/exams/create">
+            Create exam
+          </Button>
+          <Button as={Link} to="/exams" variant="outline-secondary">
+            Back to Exam List
+          </Button>
+        </ErrorPanel>
+      </Box>
+    )
+  }
+
+  const tableColSpan = 5
+  const showTable =
+    status === 'loading' || (status === 'ready' && questions.length > 0)
+
+  return (
+    <Box className={isSelectMode ? 'pb-5 mb-4' : undefined}>
+      {isSelectMode ? (
+        <PageHeader
+          breadcrumbs={breadcrumbs}
+          title="Select Questions"
+          description={[exam?.title, gradeName, subjectName]
+            .filter(Boolean)
+            .join(' · ')}
+        >
+          <p className="small mb-0 mt-2">
+            <span className="fw-semibold">{selectedCount}</span> question
+            {selectedCount === 1 ? '' : 's'} selected
+            <span className="text-muted"> · </span>
+            <span className="fw-semibold">{selectedMarks}</span> marks
+          </p>
+        </PageHeader>
+      ) : (
+        <PageHeader
+          breadcrumbs={breadcrumbs}
+          title="Question Bank"
+          description="Browse, create, and reuse questions across exams."
+          actions={
+            <Box className="d-flex flex-wrap gap-2">
+              <Button as={Link} to="/exams/generate" variant="outline-secondary">
+                Generate Questions
+              </Button>
+              <Button type="button" onClick={openCreate}>
+                Add Question
+              </Button>
+            </Box>
+          }
+        />
+      )}
+
+      <Card
+        className={
+          isSelectMode ? 'border-primary border-opacity-25' : undefined
+        }
+      >
+        <CardBody className="sc-card-body">
+          {isSelectMode && (
+            <Alert variant="info" className="mb-3 py-2">
+              Selection mode — choose questions for this exam, then continue.
+            </Alert>
+          )}
+
+          {isJobMode && (
+            <Alert
+              variant="secondary"
+              className="mb-3 py-2 d-flex flex-wrap align-items-center justify-content-between gap-2"
+            >
+              <span>Showing questions from generation job #{jobId}.</span>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline-secondary"
+                onClick={clearJobFilter}
+              >
+                View all questions
+              </Button>
+            </Alert>
+          )}
+
           <Box className="mb-3">
             <Input
               type="search"
@@ -244,38 +477,42 @@ export default function QuestionBank() {
           </Box>
 
           <Box className="row g-2 mb-3">
+            {!isSelectMode && (
+              <>
+                <Box className="col-6 col-md">
+                  <Select
+                    value={subjectFilter}
+                    onChange={changeFilter(setSubjectFilter)}
+                    aria-label="Filter by subject"
+                  >
+                    <option value="">Subject</option>
+                    {subjects.map((subject) => (
+                      <option key={subject.id} value={subject.id}>
+                        {subject.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Box>
+                <Box className="col-6 col-md">
+                  <Select
+                    value={gradeFilter}
+                    onChange={changeFilter(setGradeFilter)}
+                    aria-label="Filter by class"
+                  >
+                    <option value="">Class</option>
+                    {grades.map((grade) => (
+                      <option key={grade.id} value={grade.id}>
+                        {grade.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Box>
+              </>
+            )}
             <Box className="col-6 col-md">
               <Select
-                value={subjectFilter}
-                onChange={changeFilter(setSubjectFilter)}
-                aria-label="Filter by subject"
-              >
-                <option value="">Subject</option>
-                {subjects.map((subject) => (
-                  <option key={subject.id} value={subject.id}>
-                    {subject.name}
-                  </option>
-                ))}
-              </Select>
-            </Box>
-            <Box className="col-6 col-md">
-              <Select
-                value={gradeFilter}
-                onChange={changeFilter(setGradeFilter)}
-                aria-label="Filter by class"
-              >
-                <option value="">Class</option>
-                {grades.map((grade) => (
-                  <option key={grade.id} value={grade.id}>
-                    {grade.name}
-                  </option>
-                ))}
-              </Select>
-            </Box>
-            <Box className="col-6 col-md">
-              <Select
-                value={topicFilter}
-                onChange={changeFilter(setTopicFilter)}
+                value={labelFilter}
+                onChange={changeFilter(setLabelFilter)}
                 aria-label="Filter by topic"
               >
                 <option value="">Topic</option>
@@ -312,36 +549,56 @@ export default function QuestionBank() {
             </Box>
           </Box>
 
-          {status === 'loading' && (
-            <Box className="d-flex align-items-center gap-2 py-5 justify-content-center">
-              <Spinner label="Loading questions…" />
-              <span className="text-muted">Loading questions…</span>
-            </Box>
-          )}
-
           {status === 'error' && (
-            <Box className="py-3">
-              <Alert variant="danger" className="mb-3">
-                {error}
-              </Alert>
-              <Button type="button" onClick={() => loadQuestions()}>
-                Try again
-              </Button>
-            </Box>
+            <ErrorPanel
+              message={error}
+              onRetry={() => loadQuestions()}
+            />
           )}
 
           {status === 'ready' && questions.length === 0 && (
-            <p className="text-muted text-center py-5 mb-0">
-              {hasActiveFilters
-                ? 'No questions match your search or filters.'
-                : 'No questions yet. Add one or generate from Exam.'}
-            </p>
+            <EmptyState
+              title={
+                isJobMode
+                  ? 'No questions for this job'
+                  : hasActiveFilters
+                    ? 'No matching questions'
+                    : isSelectMode
+                      ? 'No questions available'
+                      : 'No questions yet'
+              }
+              description={
+                isJobMode
+                  ? 'This generation job did not create any questions.'
+                  : hasActiveFilters
+                    ? 'Try adjusting your search or filters.'
+                    : isSelectMode
+                      ? 'No questions are available for this exam class and subject.'
+                      : 'Add a question manually or generate questions from Exam.'
+              }
+              action={
+                !isSelectMode && !hasActiveFilters && !isJobMode ? (
+                  <Box className="d-flex flex-wrap justify-content-center gap-2">
+                    <Button type="button" onClick={openCreate}>
+                      Add Question
+                    </Button>
+                    <Button
+                      as={Link}
+                      to="/exams/generate"
+                      variant="outline-secondary"
+                    >
+                      Generate Questions
+                    </Button>
+                  </Box>
+                ) : null
+              }
+            />
           )}
 
-          {status === 'ready' && questions.length > 0 && (
+          {showTable && (
             <>
               <Box className="table-responsive">
-                <table className="table table-hover align-middle mb-0">
+                <table className="table table-hover align-middle mb-0 sc-table">
                   <thead>
                     <tr>
                       <th scope="col" style={{ width: '2.5rem' }}>
@@ -351,6 +608,7 @@ export default function QuestionBank() {
                           checked={allVisibleSelected}
                           onChange={(e) => toggleSelectAll(e.target.checked)}
                           aria-label="Select all questions on this page"
+                          disabled={status !== 'ready'}
                         />
                       </th>
                       <th scope="col">Question</th>
@@ -366,64 +624,133 @@ export default function QuestionBank() {
                     </tr>
                   </thead>
                   <tbody>
-                    {questions.map((question) => (
-                      <tr key={question.id}>
-                        <td>
-                          <input
-                            className="form-check-input"
-                            type="checkbox"
-                            checked={selectedIds.has(question.id)}
-                            onChange={(e) =>
-                              toggleSelectOne(question.id, e.target.checked)
-                            }
-                            aria-label={`Select question ${question.id}`}
-                          />
-                        </td>
-                        <td>
-                          <button
-                            type="button"
-                            className="btn btn-link link-dark text-start text-decoration-none p-0"
-                            onClick={() => openEdit(question)}
+                    {status === 'loading' ? (
+                      <tr>
+                        <td colSpan={tableColSpan} className="border-0">
+                          <Box
+                            className="d-flex flex-column align-items-center justify-content-center gap-3 py-5"
+                            aria-live="polite"
+                            aria-busy="true"
                           >
-                            {truncate(question.text)}
-                          </button>
-                        </td>
-                        <td>
-                          {TYPE_LABELS[question.question_type] ||
-                            question.question_type}
-                        </td>
-                        <td>{question.marks}</td>
-                        <td className="text-muted small">
-                          {topicsText(question.labels)}
+                            <Spinner label="Loading questions…" />
+                            <span className="text-muted">
+                              Loading questions…
+                            </span>
+                          </Box>
                         </td>
                       </tr>
-                    ))}
+                    ) : (
+                      questions.map((question) => (
+                        <tr
+                          key={question.id}
+                          className={
+                            selectedIds.has(question.id)
+                              ? 'table-active'
+                              : undefined
+                          }
+                        >
+                          <td>
+                            <input
+                              className="form-check-input"
+                              type="checkbox"
+                              checked={selectedIds.has(question.id)}
+                              onChange={(e) =>
+                                toggleSelectOne(question, e.target.checked)
+                              }
+                              aria-label={`Select question ${question.id}`}
+                            />
+                          </td>
+                          <td>
+                            {isSelectMode ? (
+                              truncate(question.text)
+                            ) : (
+                              <button
+                                type="button"
+                                className="btn btn-link link-dark text-start text-decoration-none p-0"
+                                onClick={() => openEdit(question)}
+                              >
+                                {truncate(question.text)}
+                              </button>
+                            )}
+                          </td>
+                          <td>
+                            {QUESTION_TYPE_LABELS[question.question_type] ||
+                              question.question_type}
+                          </td>
+                          <td>{question.marks}</td>
+                          <td className="text-muted small">
+                            {labelsText(question.labels)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </Box>
 
-              <Pagination
-                className="mt-3"
-                page={page}
-                totalPages={totalPages}
-                count={totalCount}
-                pageSize={pageSize}
-                onChange={setPage}
-              />
+              {status === 'ready' && questions.length > 0 && (
+                <Pagination
+                  className="mt-3"
+                  page={page}
+                  totalPages={totalPages}
+                  count={totalCount}
+                  pageSize={pageSize}
+                  onChange={setPage}
+                />
+              )}
             </>
           )}
         </CardBody>
       </Card>
 
-      <QuestionFormDrawer
-        open={drawerOpen}
-        mode={drawerMode}
-        question={editingQuestion}
-        labels={labels}
-        onClose={() => setDrawerOpen(false)}
-        onSaved={handleSaved}
-        onLabelsChange={handleLabelCreated}
-      />
+      {isSelectMode && (
+        <Box className="sc-sticky-action-bar">
+          <Box className="d-flex flex-wrap align-items-center justify-content-between gap-3 px-4 py-3">
+            <Box>
+              <span className="fw-semibold">{selectedCount}</span> question
+              {selectedCount === 1 ? '' : 's'} selected
+              <span className="text-muted mx-2">·</span>
+              Total marks: <span className="fw-semibold">{selectedMarks}</span>
+              {submitError && (
+                <Alert variant="danger" className="mb-0 mt-2 py-1 px-2 small">
+                  {submitError}
+                </Alert>
+              )}
+            </Box>
+            <Box className="d-flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline-secondary"
+                disabled={selectedCount === 0 || submitStatus === 'submitting'}
+                onClick={clearSelection}
+              >
+                Clear Selection
+              </Button>
+              <Button
+                type="button"
+                disabled={selectedCount === 0 || submitStatus === 'submitting'}
+                onClick={handleAddToExam}
+              >
+                {submitStatus === 'submitting'
+                  ? 'Adding…'
+                  : 'Continue to paper'}
+              </Button>
+            </Box>
+          </Box>
+        </Box>
+      )}
+
+      {!isSelectMode && (
+        <QuestionFormDrawer
+          open={drawerOpen}
+          mode={drawerMode}
+          question={editingQuestion}
+          labels={labels}
+          onClose={() => setDrawerOpen(false)}
+          onSaved={handleSaved}
+          onLabelsChange={handleLabelCreated}
+        />
+      )}
     </Box>
   )
 }

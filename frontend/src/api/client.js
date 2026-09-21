@@ -1,6 +1,11 @@
 import axios from 'axios'
 
-import { getAccessToken } from '../utils/authTokens'
+import {
+  clearTokens,
+  getAccessToken,
+  getRefreshToken,
+  setTokens,
+} from '../utils/authTokens'
 import { redirectToAuth } from '../utils/authRedirect'
 
 const client = axios.create({
@@ -26,17 +31,59 @@ function isAuthEndpoint(url = '') {
   )
 }
 
+let refreshPromise = null
+
+async function refreshAccessToken() {
+  const refresh = getRefreshToken()
+  if (!refresh) {
+    throw new Error('No refresh token')
+  }
+
+  const { data } = await axios.post(
+    `${client.defaults.baseURL}/auth/token/refresh/`,
+    { refresh },
+    { headers: { 'Content-Type': 'application/json' } },
+  )
+
+  if (!data?.access) {
+    throw new Error('Refresh response missing access token')
+  }
+
+  setTokens({ access: data.access, refresh: data.refresh || refresh })
+  return data.access
+}
+
 client.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     const status = error.response?.status
-    const url = error.config?.url || ''
+    const original = error.config
+    const url = original?.url || ''
 
-    if (status === 401 && !isAuthEndpoint(url)) {
-      redirectToAuth()
+    if (status !== 401 || isAuthEndpoint(url) || !original || original._retry) {
+      if (status === 401 && !isAuthEndpoint(url)) {
+        redirectToAuth()
+      }
+      return Promise.reject(error)
     }
 
-    return Promise.reject(error)
+    original._retry = true
+
+    try {
+      if (!refreshPromise) {
+        refreshPromise = refreshAccessToken().finally(() => {
+          refreshPromise = null
+        })
+      }
+      const access = await refreshPromise
+      original.headers = original.headers || {}
+      original.headers.Authorization = `Bearer ${access}`
+      return client(original)
+    } catch {
+      clearTokens()
+      redirectToAuth()
+      return Promise.reject(error)
+    }
   },
 )
 

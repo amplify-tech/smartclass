@@ -5,6 +5,15 @@ from rest_framework import serializers
 User = get_user_model()
 
 
+class ProfileSerializer(serializers.ModelSerializer):
+    """Current authenticated user profile (no password)."""
+
+    class Meta:
+        model = User
+        fields = ('id', 'email', 'first_name', 'last_name')
+        read_only_fields = fields
+
+
 class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True)
     first_name = serializers.CharField(required=True, max_length=150)
@@ -31,10 +40,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         return email
 
     def validate_first_name(self, value):
-        name = value.strip()
-        if not name:
-            raise serializers.ValidationError('This field may not be blank.')
-        return name
+        return value.strip()
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:

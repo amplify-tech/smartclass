@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { createLabel } from '../../api/labels'
 import { createQuestion, updateQuestion } from '../../api/questions'
 import { useCatalog } from '../../contexts/CatalogContext'
-import { applyApiErrors } from '../../utils/apiErrors'
+import { applyApiErrors, getApiErrorMessage } from '../../utils/apiErrors'
 import {
   Box,
   Button,
@@ -164,9 +164,10 @@ export default function QuestionFormDrawer({
   onLabelsChange,
 }) {
   const { grades, subjects } = useCatalog()
-  const [newTopic, setNewTopic] = useState('')
-  const [topicError, setTopicError] = useState(null)
-  const [addingTopic, setAddingTopic] = useState(false)
+  const [newLabelName, setNewLabelName] = useState('')
+  const [labelError, setLabelError] = useState(null)
+  const [addingLabel, setAddingLabel] = useState(false)
+  const readOnly = mode === 'view'
 
   const {
     register,
@@ -184,9 +185,9 @@ export default function QuestionFormDrawer({
 
   useEffect(() => {
     if (!open) return
-    setNewTopic('')
-    setTopicError(null)
-    if (mode === 'edit' && question) {
+    setNewLabelName('')
+    setLabelError(null)
+    if ((mode === 'edit' || mode === 'view') && question) {
       reset(questionToFormValues(question))
     } else {
       reset(emptyDefaults)
@@ -194,6 +195,7 @@ export default function QuestionFormDrawer({
   }, [open, mode, question, reset])
 
   const onSubmit = async (values) => {
+    if (readOnly) return
     const payload = buildPayload(values)
     try {
       const { data } =
@@ -206,10 +208,10 @@ export default function QuestionFormDrawer({
     }
   }
 
-  async function handleAddTopic() {
-    const name = newTopic.trim()
+  async function handleAddLabel() {
+    const name = newLabelName.trim()
     if (!name) {
-      setTopicError('Enter a topic name')
+      setLabelError('Enter a topic name')
       return
     }
 
@@ -217,32 +219,32 @@ export default function QuestionFormDrawer({
       (label) => label.name.toLowerCase() === name.toLowerCase(),
     )
     if (existing) {
-      setNewTopic('')
-      setTopicError(null)
+      setNewLabelName('')
+      setLabelError(null)
       return existing
     }
 
-    setAddingTopic(true)
-    setTopicError(null)
+    setAddingLabel(true)
+    setLabelError(null)
     try {
       const { data } = await createLabel({ name })
       onLabelsChange?.(data)
-      setNewTopic('')
+      setNewLabelName('')
       return data
     } catch (err) {
-      const message =
-        err.response?.data?.name?.[0] ||
-        err.response?.data?.error ||
-        err.message ||
-        'Could not create topic'
-      setTopicError(message)
+      setLabelError(getApiErrorMessage(err, 'Could not create topic'))
       return null
     } finally {
-      setAddingTopic(false)
+      setAddingLabel(false)
     }
   }
 
-  const title = mode === 'edit' ? 'Edit Question' : 'Add Question'
+  const title =
+    mode === 'view'
+      ? 'View Question'
+      : mode === 'edit'
+        ? 'Edit Question'
+        : 'Add Question'
 
   return (
     <Offcanvas
@@ -258,19 +260,22 @@ export default function QuestionFormDrawer({
             disabled={isSubmitting}
             onClick={onClose}
           >
-            Cancel
+            {readOnly ? 'Close' : 'Cancel'}
           </Button>
-          <Button
-            type="submit"
-            form="question-bank-form"
-            disabled={isSubmitting}
-          >
-            {isSubmitting ? 'Saving…' : 'Save'}
-          </Button>
+          {!readOnly && (
+            <Button
+              type="submit"
+              form="question-bank-form"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? 'Saving…' : 'Save'}
+            </Button>
+          )}
         </>
       }
     >
       <form id="question-bank-form" onSubmit={handleSubmit(onSubmit)} noValidate>
+        <fieldset disabled={readOnly} className="border-0 p-0 m-0">
         <FormField
           id="qb-text"
           label="Question"
@@ -287,7 +292,7 @@ export default function QuestionFormDrawer({
             className="col-sm-6"
           >
             <Select {...register('question_type')}>
-              <option value=""> </option>
+              <option value="">Select type</option>
               <option value="mcq">MCQ</option>
               <option value="short">Short</option>
               <option value="long">Long</option>
@@ -312,7 +317,7 @@ export default function QuestionFormDrawer({
             className="col-sm-6"
           >
             <Select {...register('grade')}>
-              <option value=""> </option>
+              <option value="">Select class</option>
               {grades.map((grade) => (
                 <option key={grade.id} value={grade.id}>
                   {grade.name}
@@ -328,7 +333,7 @@ export default function QuestionFormDrawer({
             className="col-sm-6"
           >
             <Select {...register('subject')}>
-              <option value=""> </option>
+              <option value="">Select subject</option>
               {subjects.map((subject) => (
                 <option key={subject.id} value={subject.id}>
                   {subject.name}
@@ -359,7 +364,7 @@ export default function QuestionFormDrawer({
               error={errors.correct_answer?.message}
             >
               <Select {...register('correct_answer')}>
-                <option value=""> </option>
+                <option value="">Select answer</option>
                 {OPTION_KEYS.map((key) => (
                   <option key={key} value={key}>
                     {key}
@@ -409,71 +414,77 @@ export default function QuestionFormDrawer({
                           className="badge text-bg-light border d-inline-flex align-items-center gap-1"
                         >
                           {label.name}
-                          <button
-                            type="button"
-                            className="btn-close"
-                            style={{ fontSize: '0.55rem' }}
-                            aria-label={`Remove ${label.name}`}
-                            onClick={() =>
-                              field.onChange(
-                                field.value.filter((id) => id !== label.id),
-                              )
-                            }
-                          />
+                          {!readOnly && (
+                            <button
+                              type="button"
+                              className="btn-close"
+                              style={{ fontSize: '0.55rem' }}
+                              aria-label={`Remove ${label.name}`}
+                              onClick={() =>
+                                field.onChange(
+                                  field.value.filter((id) => id !== label.id),
+                                )
+                              }
+                            />
+                          )}
                         </span>
                       ))}
                     </Box>
                   )}
 
-                  <Box className="d-flex gap-2 align-items-start">
-                    <Select
-                      className="flex-grow-1"
-                      value=""
-                      onChange={(e) => {
-                        const id = Number(e.target.value)
-                        if (!id || field.value.includes(id)) return
-                        field.onChange([...field.value, id])
-                      }}
-                    >
-                      <option value="">Add existing topic…</option>
-                      {available.map((label) => (
-                        <option key={label.id} value={label.id}>
-                          {label.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </Box>
+                  {!readOnly && (
+                    <>
+                      <Box className="d-flex gap-2 align-items-start">
+                        <Select
+                          className="flex-grow-1"
+                          value=""
+                          onChange={(e) => {
+                            const id = Number(e.target.value)
+                            if (!id || field.value.includes(id)) return
+                            field.onChange([...field.value, id])
+                          }}
+                        >
+                          <option value="">Add existing topic…</option>
+                          {available.map((label) => (
+                            <option key={label.id} value={label.id}>
+                              {label.name}
+                            </option>
+                          ))}
+                        </Select>
+                      </Box>
 
-                  <Box className="d-flex gap-2 mt-2">
-                    <Input
-                      placeholder="New topic"
-                      value={newTopic}
-                      onChange={(e) => setNewTopic(e.target.value)}
-                      onKeyDown={async (e) => {
-                        if (e.key !== 'Enter') return
-                        e.preventDefault()
-                        const created = await handleAddTopic()
-                        if (created && !field.value.includes(created.id)) {
-                          field.onChange([...field.value, created.id])
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline-secondary"
-                      disabled={addingTopic}
-                      onClick={async () => {
-                        const created = await handleAddTopic()
-                        if (created && !field.value.includes(created.id)) {
-                          field.onChange([...field.value, created.id])
-                        }
-                      }}
-                    >
-                      + Add
-                    </Button>
-                  </Box>
-                  {topicError && (
-                    <div className="invalid-feedback d-block">{topicError}</div>
+                      <Box className="d-flex gap-2 mt-2">
+                        <Input
+                          placeholder="New topic"
+                          value={newLabelName}
+                          onChange={(e) => setNewLabelName(e.target.value)}
+                          onKeyDown={async (e) => {
+                            if (e.key !== 'Enter') return
+                            e.preventDefault()
+                            const created = await handleAddLabel()
+                            if (created && !field.value.includes(created.id)) {
+                              field.onChange([...field.value, created.id])
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline-secondary"
+                          disabled={addingLabel}
+                          onClick={async () => {
+                            const created = await handleAddLabel()
+                            if (created && !field.value.includes(created.id)) {
+                              field.onChange([...field.value, created.id])
+                            }
+                          }}
+                        >
+                          + Add
+                        </Button>
+                      </Box>
+                      {labelError && (
+                        <div className="invalid-feedback d-block">{labelError}</div>
+                      )}
+                    </>
                   )}
                 </Box>
               )
@@ -487,7 +498,7 @@ export default function QuestionFormDrawer({
           error={errors.difficulty?.message}
         >
           <Select {...register('difficulty')}>
-            <option value=""> </option>
+            <option value="">Select difficulty</option>
             <option value="easy">Easy</option>
             <option value="medium">Medium</option>
             <option value="hard">Hard</option>
@@ -495,6 +506,7 @@ export default function QuestionFormDrawer({
         </FormField>
 
         <FormRootError message={errors.root?.message} />
+        </fieldset>
       </form>
     </Offcanvas>
   )

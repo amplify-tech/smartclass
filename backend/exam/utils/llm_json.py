@@ -58,6 +58,7 @@ def _clean_question(item: dict) -> dict:
 
     correct_answer = str(item.get('correct_answer') or '').strip()
     options = []
+    labels = _clean_labels(item.get('labels'))
 
     if q_type == QuestionType.MCQ:
         options = _clean_options(item.get('options') or [])
@@ -74,7 +75,33 @@ def _clean_question(item: dict) -> dict:
         'difficulty': difficulty,
         'correct_answer': correct_answer,
         'options': options,
+        'labels': labels,
     }
+
+
+def _clean_labels(raw) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        raw = [raw]
+    if not isinstance(raw, list):
+        return []
+
+    cleaned = []
+    seen = set()
+    for item in raw:
+        name = str(item or '').strip()
+        if not name:
+            continue
+        name = name[:64]
+        key = name.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(name)
+        if len(cleaned) >= 3:
+            break
+    return cleaned
 
 
 def _clean_options(options) -> list[dict]:
@@ -86,14 +113,10 @@ def _clean_options(options) -> list[dict]:
         text = str(opt.get('text', '')).strip()
         if not text:
             raise ValueError('empty option text')
-        try:
-            order = int(opt.get('order', i))
-        except (TypeError, ValueError):
-            order = i
         cleaned.append({
             'text': text,
             'is_correct': bool(opt.get('is_correct', False)),
-            'order': order,
+            'order': i,
         })
 
     if not any(o['is_correct'] for o in cleaned):
