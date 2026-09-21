@@ -1,13 +1,3 @@
-export const EXAM_STATUS_LABELS = {
-  draft: 'Draft',
-  finalized: 'Finalized',
-}
-
-export const EXAM_STATUS_TONE = {
-  draft: 'secondary',
-  finalized: 'success',
-}
-
 export const DIFFICULTY_LABELS = {
   easy: 'Easy',
   medium: 'Medium',

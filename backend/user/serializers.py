@@ -40,10 +40,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         return email
 
     def validate_first_name(self, value):
-        name = value.strip()
-        if not name:
-            raise serializers.ValidationError('This field may not be blank.')
-        return name
+        return value.strip()
 
     def validate(self, attrs):
         if attrs['password'] != attrs['password_confirm']:

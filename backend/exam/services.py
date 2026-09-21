@@ -6,28 +6,43 @@ from django.db.models import Max
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
+from config.exceptions import ConflictError
+from config.utils import dedupe_preserve_order
 from document.models import Document
 from exam.llm import get_llm_provider
 from exam.models import (
+    Exam,
     ExamQuestion,
-    Label,
     Option,
     Question,
     QuestionGenerationJob,
     QuestionType,
 )
+from exam.utils.labels import resolve_labels
 from exam.utils.llm_json import parse_questions
 from exam.utils.prompts import SYSTEM_PROMPT, build_user_prompt
 
 logger = logging.getLogger(__name__)
 
+_GENERATION_ERROR_GENERIC = 'Question generation failed. Please try again.'
+_GENERATION_ERROR_PARSE = (
+    'Could not process the generated questions. Please try again.'
+)
+_GENERATION_ERROR_TIMEOUT = 'Question generation timed out. Please try again.'
+
 
 class ExamService:
     """Assemble and maintain exam question placements."""
 
+    @staticmethod
+    def _lock_exam(exam):
+        return Exam.objects.select_for_update().get(pk=exam.pk)
+
     @transaction.atomic
     def add_questions(self, exam, question_ids):
-        ordered_ids = list(dict.fromkeys(question_ids))
+        exam = self._lock_exam(exam)
+
+        ordered_ids = dedupe_preserve_order(question_ids)
         questions = {
             q.id: q
             for q in Question.objects.filter(pk__in=ordered_ids)
@@ -76,7 +91,6 @@ class ExamService:
                     exam=exam,
                     question=question,
                     order=next_order,
-                    marks=question.marks,
                 ),
             )
 
@@ -95,6 +109,8 @@ class ExamService:
 
     @transaction.atomic
     def reorder_questions(self, exam, items):
+        exam = self._lock_exam(exam)
+
         placements = {
             eq.id: eq
             for eq in ExamQuestion.objects.filter(exam=exam).select_for_update()
@@ -109,16 +125,12 @@ class ExamService:
                 {'items': f'invalid exam_question_id: {sorted(missing)}'},
             )
 
-        orders = [item['order'] for item in items]
-        if len(orders) != len(set(orders)):
-            raise ValidationError({'items': 'duplicate order values'})
-
         proposed = {eq_id: eq.order for eq_id, eq in placements.items()}
         for item in items:
             proposed[item['exam_question_id']] = item['order']
         if len(proposed) != len(set(proposed.values())):
-            raise ValidationError(
-                {'items': 'order values collide with existing placements'},
+            raise ConflictError(
+                'order values collide with existing placements',
             )
 
         # Two-phase update avoids unique (exam, order) collisions mid-swap.
@@ -136,6 +148,17 @@ class ExamService:
         logger.info('exam %s reordered %s questions', exam.id, len(items))
         return exam
 
+    @transaction.atomic
+    def remove_placement(self, exam, placement):
+        exam = self._lock_exam(exam)
+
+        deleted, _ = ExamQuestion.objects.filter(
+            pk=placement.pk,
+            exam=exam,
+        ).delete()
+        if deleted:
+            exam.refresh_totals()
+        return exam
 
 
 class QuestionGenerationService:
@@ -157,7 +180,7 @@ class QuestionGenerationService:
         if not document_ids:
             return []
 
-        ids = list(set(document_ids))
+        ids = set(document_ids)
         docs = list(
             Document.objects.filter(
                 uploaded_by=user,
@@ -165,7 +188,7 @@ class QuestionGenerationService:
                 status=Document.Status.READY,
             )
         )
-        missing = set(ids) - {d.pk for d in docs}
+        missing = ids - {d.pk for d in docs}
         if missing:
             raise ValidationError(
                 {'document_ids': f'invalid or not-ready ids: {sorted(missing)}'},
@@ -197,18 +220,29 @@ class QuestionGenerationService:
         except Exception as exc:
             logger.exception('job failed id=%s', job_id)
             job.status = QuestionGenerationJob.Status.FAILED
-            job.error_message = str(exc)[:2000]
+            job.error_message = self._safe_error_message(exc)
             job.completed_at = timezone.now()
             job.save(update_fields=['status', 'error_message', 'completed_at'])
             raise
+
+    @staticmethod
+    def _safe_error_message(exc: Exception) -> str:
+        """Return a client-safe message; never expose raw exception text."""
+        if isinstance(exc, (ValueError, TypeError, KeyError)):
+            return _GENERATION_ERROR_PARSE
+        name = type(exc).__name__.lower()
+        message = str(exc).lower()
+        if 'timeout' in name or 'timeout' in message or 'timed out' in message:
+            return _GENERATION_ERROR_TIMEOUT
+        return _GENERATION_ERROR_GENERIC
 
     @transaction.atomic
     def _save_questions(self, job, items):
         job.questions.all().delete()
 
         for item in items:
-            options = item.pop('options', [])
-            label_names = item.pop('labels', []) or []
+            options = item.get('options') or []
+            label_names = item.get('labels') or []
             question = Question.objects.create(
                 question_type=item['question_type'],
                 text=item['text'],
@@ -221,7 +255,7 @@ class QuestionGenerationService:
                 created_by=job.created_by,
             )
             if label_names:
-                question.labels.set(self._resolve_labels(label_names))
+                question.labels.set(resolve_labels(label_names))
             if question.question_type == QuestionType.MCQ:
                 Option.objects.bulk_create([
                     Option(
@@ -232,13 +266,3 @@ class QuestionGenerationService:
                     )
                     for index, opt in enumerate(options, start=1)
                 ])
-
-    @staticmethod
-    def _resolve_labels(names: list[str]) -> list[Label]:
-        labels = []
-        for name in names:
-            label = Label.objects.filter(name__iexact=name).first()
-            if label is None:
-                label = Label.objects.create(name=name)
-            labels.append(label)
-        return labels

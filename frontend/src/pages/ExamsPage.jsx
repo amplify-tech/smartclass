@@ -16,12 +16,7 @@ import {
 } from '../components/common_ui'
 import { useCatalog } from '../contexts/CatalogContext'
 import { getApiErrorMessage } from '../utils/apiErrors'
-import {
-  DIFFICULTY_LABELS,
-  DIFFICULTY_TONE,
-  EXAM_STATUS_LABELS,
-  EXAM_STATUS_TONE,
-} from '../utils/examLabels'
+import { DIFFICULTY_LABELS, DIFFICULTY_TONE } from '../utils/examLabels'
 import { formatDateTime } from '../utils/formatDate'
 import {
   buildListParams,
@@ -122,7 +117,6 @@ export default function ExamsPage() {
                       <th scope="col" className="text-end">
                         Marks
                       </th>
-                      <th scope="col">Status</th>
                       <th scope="col">Created</th>
                       <th scope="col" className="text-end">
                         Actions
@@ -132,7 +126,6 @@ export default function ExamsPage() {
                   <tbody>
                     {exams.map((exam) => {
                       const difficulty = exam.difficulty
-                      const examStatus = exam.status
                       return (
                         <tr key={exam.id}>
                           <td className="fw-medium">{exam.title || '—'}</td>
@@ -153,15 +146,6 @@ export default function ExamsPage() {
                             {exam.question_count ?? 0}
                           </td>
                           <td className="text-end">{exam.total_marks ?? 0}</td>
-                          <td>
-                            <StatusBadge
-                              tone={EXAM_STATUS_TONE[examStatus] || 'secondary'}
-                            >
-                              {EXAM_STATUS_LABELS[examStatus] ||
-                                examStatus ||
-                                '—'}
-                            </StatusBadge>
-                          </td>
                           <td className="text-nowrap small text-muted">
                             {formatDateTime(exam.created_at)}
                           </td>

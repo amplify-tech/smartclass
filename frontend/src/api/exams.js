@@ -46,16 +46,3 @@ export function reorderExamQuestions(examId, payload) {
 export function removeExamQuestion(examId, examQuestionId) {
   return client.delete(`/exams/${examId}/exam-questions/${examQuestionId}/`)
 }
-
-/**
- * Update a placed question (order and/or marks).
- * @param {number|string} examId
- * @param {number|string} examQuestionId
- * @param {{ order?: number, marks?: number }} payload
- */
-export function updateExamQuestion(examId, examQuestionId, payload) {
-  return client.patch(
-    `/exams/${examId}/exam-questions/${examQuestionId}/`,
-    payload,
-  )
-}

@@ -1,6 +1,4 @@
 ---
-description: SmartClass frontend conventions (React + Bootstrap UI)
-globs: *.jsx,*.js,*.html,*.css,
 alwaysApply: false
 ---
 ------------------

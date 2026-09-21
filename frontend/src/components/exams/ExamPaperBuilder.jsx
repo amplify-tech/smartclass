@@ -70,7 +70,7 @@ export default function ExamPaperBuilder({ examId }) {
   const totalMarks = useMemo(
     () =>
       placements.reduce(
-        (sum, placement) => sum + (Number(placement.marks) || 0),
+        (sum, placement) => sum + (Number(placement.question?.marks) || 0),
         0,
       ),
     [placements],
@@ -260,7 +260,7 @@ export default function ExamPaperBuilder({ examId }) {
                   QUESTION_TYPE_LABELS[question.question_type] ||
                   question.question_type ||
                   '—'
-                const marks = Number(placement.marks) || 0
+                const marks = Number(question.marks) || 0
                 const marksLabel = `${marks} mark${marks === 1 ? '' : 's'}`
 
                 return (

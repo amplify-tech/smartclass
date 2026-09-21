@@ -1,0 +1,9 @@
+"""Exam-domain constants shared by serializers and services."""
+
+MAX_QUESTIONS_PER_JOB = 15
+MAX_DOCUMENTS_PER_JOB = 2
+MAX_QUESTIONS_PER_ADD = 100
+MAX_MARKS = 1000
+MAX_MCQ_OPTIONS = 6
+MIN_MCQ_OPTIONS = 2
+MAX_EXAM_DURATION_MINUTES = 600

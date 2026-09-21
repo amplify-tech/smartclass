@@ -146,6 +146,30 @@ class Question(models.Model):
             ),
         ]
 
+    def save(self, *args, **kwargs):
+        update_fields = kwargs.get('update_fields')
+        marks_may_change = update_fields is None or 'marks' in update_fields
+        old_marks = None
+        if self.pk and marks_may_change:
+            old_marks = (
+                type(self)
+                .objects.filter(pk=self.pk)
+                .values_list('marks', flat=True)
+                .first()
+            )
+
+        super().save(*args, **kwargs)
+
+        if old_marks is not None and old_marks != self.marks:
+            self.refresh_related_exam_totals()
+
+    def refresh_related_exam_totals(self):
+        """Recompute cached totals on exams that place this bank question."""
+        for exam in Exam.objects.filter(
+            exam_questions__question_id=self.pk,
+        ).distinct():
+            exam.refresh_totals()
+
     def __str__(self):
         return self.text[:80]
 
@@ -177,11 +201,7 @@ class Option(models.Model):
 
 
 class Exam(models.Model):
-    """Teacher-assembled exam paper (draft or finalized)."""
-
-    class Status(models.TextChoices):
-        DRAFT = 'draft', 'Draft'
-        FINALIZED = 'finalized', 'Finalized'
+    """Teacher-assembled exam paper."""
 
     title = models.CharField(max_length=255)
     description = models.TextField(
@@ -210,14 +230,9 @@ class Exam(models.Model):
         choices=Difficulty.choices,
         blank=True,
     )
-    # Cached aggregates — updated when placements change; never user input.
+    # Cached aggregates from bank question marks; never user input.
     total_marks = models.PositiveSmallIntegerField(default=0)
     question_count = models.PositiveSmallIntegerField(default=0)
-    status = models.CharField(
-        max_length=16,
-        choices=Status.choices,
-        default=Status.DRAFT,
-    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -231,9 +246,9 @@ class Exam(models.Model):
         ordering = ['-created_at']
 
     def refresh_totals(self, *, save=True):
-        """Recompute cached total_marks and question_count from placements."""
+        """Recompute cached totals from bank question marks on placements."""
         aggregates = self.exam_questions.aggregate(
-            marks=models.Sum('marks'),
+            marks=models.Sum('question__marks'),
             count=models.Count('id'),
         )
         self.total_marks = aggregates['marks'] or 0
@@ -260,9 +275,6 @@ class ExamQuestion(models.Model):
         related_name='exam_placements',
     )
     order = models.PositiveSmallIntegerField()
-    marks = models.PositiveSmallIntegerField(
-        help_text='Marks for this question on this exam (may differ from bank).',
-    )
 
     class Meta:
         db_table = 'exam_questions'

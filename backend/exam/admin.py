@@ -19,7 +19,7 @@ class OptionInline(admin.TabularInline):
 class ExamQuestionInline(admin.TabularInline):
     model = ExamQuestion
     extra = 0
-    fields = ('order', 'question', 'marks')
+    fields = ('order', 'question')
     raw_id_fields = ('question',)
 
 
@@ -82,11 +82,10 @@ class ExamAdmin(admin.ModelAdmin):
         'difficulty',
         'question_count',
         'total_marks',
-        'status',
         'created_by',
         'created_at',
     )
-    list_filter = ('status', 'difficulty', 'grade', 'subject')
+    list_filter = ('difficulty', 'grade', 'subject')
     search_fields = ('title', 'school_name')
     raw_id_fields = ('created_by',)
     inlines = (ExamQuestionInline,)
@@ -95,5 +94,5 @@ class ExamAdmin(admin.ModelAdmin):
 
 @admin.register(ExamQuestion)
 class ExamQuestionAdmin(admin.ModelAdmin):
-    list_display = ('exam', 'order', 'question', 'marks')
+    list_display = ('exam', 'order', 'question')
     raw_id_fields = ('exam', 'question')

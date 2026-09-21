@@ -28,7 +28,7 @@ function formatDuration(minutes) {
 
 function QuestionBlock({ index, placement }) {
   const question = placement.question || {}
-  const marks = Number(placement.marks) || 0
+  const marks = Number(question.marks) || 0
   const type = question.question_type
   const options = sortByOrder(question.options || [])
 

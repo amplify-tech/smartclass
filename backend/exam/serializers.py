@@ -1,6 +1,17 @@
 from django.db import transaction
 from rest_framework import serializers
 
+from config.exceptions import ConflictError
+from config.utils import dedupe_preserve_order
+from exam.constants import (
+    MAX_DOCUMENTS_PER_JOB,
+    MAX_EXAM_DURATION_MINUTES,
+    MAX_MARKS,
+    MAX_MCQ_OPTIONS,
+    MAX_QUESTIONS_PER_ADD,
+    MAX_QUESTIONS_PER_JOB,
+    MIN_MCQ_OPTIONS,
+)
 from exam.models import (
     Exam,
     ExamQuestion,
@@ -18,18 +29,19 @@ class LabelSerializer(serializers.ModelSerializer):
         fields = ('id', 'name')
         read_only_fields = ('id',)
 
+    def validate_name(self, value):
+        name = value.strip()
+        qs = Label.objects.filter(name__iexact=name)
+        if qs.exists():
+            raise serializers.ValidationError('A label with this name already exists.')
+        return name
+
 
 class OptionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Option
         fields = ('id', 'text', 'is_correct', 'order')
         read_only_fields = ('id', 'order')
-
-    def validate_text(self, value):
-        text = (value or '').strip()
-        if not text:
-            raise serializers.ValidationError('Option text is required.')
-        return text
 
 
 class QuestionSerializer(serializers.ModelSerializer):
@@ -72,6 +84,9 @@ class QuestionSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         )
+        extra_kwargs = {
+            'marks': {'min_value': 1, 'max_value': MAX_MARKS},
+        }
 
     def validate(self, attrs):
         question_type = attrs.get(
@@ -101,14 +116,29 @@ class QuestionSerializer(serializers.ModelSerializer):
                 {'options': 'Only MCQ questions may include options.'},
             )
 
+        if self.instance is not None:
+            self._validate_grade_subject_change(attrs)
+
         return attrs
 
+    def _validate_grade_subject_change(self, attrs):
+        grade = attrs.get('grade')
+        subject = attrs.get('subject')
+        grade_changing = grade is not None and grade.pk != self.instance.grade_id
+        subject_changing = subject is not None and subject.pk != self.instance.subject_id
+        if not (grade_changing or subject_changing):
+            return
+        if self.instance.exam_placements.exists():
+            raise ConflictError(
+                'Cannot change grade/subject while this question is used on an exam.',
+            )
+
     def _validate_mcq_options(self, options):
-        if len(options) < 2:
+        if len(options) < MIN_MCQ_OPTIONS:
             raise serializers.ValidationError(
                 {'options': 'Add at least two options.'},
             )
-        if len(options) > 6:
+        if len(options) > MAX_MCQ_OPTIONS:
             raise serializers.ValidationError(
                 {'options': 'At most six options are allowed.'},
             )
@@ -230,6 +260,7 @@ class QuestionGenerationJobSerializer(serializers.ModelSerializer):
         write_only=True,
         required=False,
         default=list,
+        max_length=MAX_DOCUMENTS_PER_JOB,
     )
     question_ids = serializers.PrimaryKeyRelatedField(
         source='questions',
@@ -262,6 +293,15 @@ class QuestionGenerationJobSerializer(serializers.ModelSerializer):
             'created_at',
             'completed_at',
         )
+        extra_kwargs = {
+            'total_marks': {'min_value': 1, 'max_value': MAX_MARKS},
+        }
+
+    def validate_description(self, value):
+        return (value or '').strip()
+
+    def validate_document_ids(self, value):
+        return dedupe_preserve_order(value or [])
 
     def validate_question_types(self, value):
         if not isinstance(value, dict) or not value:
@@ -283,8 +323,10 @@ class QuestionGenerationJobSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f'count for {key} must be >= 1')
             cleaned[q_type] = cleaned.get(q_type, 0) + count
 
-        if sum(cleaned.values()) > 50:
-            raise serializers.ValidationError('total questions cannot exceed 50')
+        if sum(cleaned.values()) > MAX_QUESTIONS_PER_JOB:
+            raise serializers.ValidationError(
+                f'total questions cannot exceed {MAX_QUESTIONS_PER_JOB}',
+            )
         return cleaned
 
 
@@ -293,7 +335,7 @@ class ExamQuestionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ExamQuestion
-        fields = ('id', 'order', 'marks', 'question')
+        fields = ('id', 'order', 'question')
 
 
 class ExamSerializer(serializers.ModelSerializer):
@@ -312,7 +354,6 @@ class ExamSerializer(serializers.ModelSerializer):
             'difficulty',
             'total_marks',
             'question_count',
-            'status',
             'exam_questions',
             'created_at',
             'updated_at',
@@ -324,19 +365,28 @@ class ExamSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         )
+        extra_kwargs = {
+            'duration_minutes': {
+                'min_value': 1,
+                'max_value': MAX_EXAM_DURATION_MINUTES,
+            },
+        }
 
-    def validate_school_name(self, value):
-        name = (value or '').strip()
-        if not name:
-            raise serializers.ValidationError('School name is required.')
-        return name
+    def validate(self, attrs):
+        if self.instance is None or self.instance.question_count == 0:
+            return attrs
 
-    def validate_duration_minutes(self, value):
-        if value is None or value < 1:
-            raise serializers.ValidationError(
-                'Duration must be at least 1 minute.',
+        grade = attrs.get('grade')
+        subject = attrs.get('subject')
+        if grade is not None and grade.pk != self.instance.grade_id:
+            raise ConflictError(
+                'Cannot change grade after questions have been added.',
             )
-        return value
+        if subject is not None and subject.pk != self.instance.subject_id:
+            raise ConflictError(
+                'Cannot change subject after questions have been added.',
+            )
+        return attrs
 
 
 class ExamListSerializer(serializers.ModelSerializer):
@@ -352,7 +402,6 @@ class ExamListSerializer(serializers.ModelSerializer):
             'difficulty',
             'total_marks',
             'question_count',
-            'status',
             'created_at',
             'updated_at',
         )
@@ -367,20 +416,28 @@ class ExamListSerializer(serializers.ModelSerializer):
 
 class AddExamQuestionsSerializer(serializers.Serializer):
     question_ids = serializers.ListField(
-        child=serializers.IntegerField(),
+        child=serializers.IntegerField(min_value=1),
         allow_empty=False,
+        max_length=MAX_QUESTIONS_PER_ADD,
     )
 
-
-class UpdateExamQuestionSerializer(serializers.Serializer):
-    order = serializers.IntegerField(required=False, min_value=1)
-    marks = serializers.IntegerField(required=False, min_value=1)
+    def validate_question_ids(self, value):
+        return dedupe_preserve_order(value)
 
 
 class ReorderItemSerializer(serializers.Serializer):
-    exam_question_id = serializers.IntegerField()
+    exam_question_id = serializers.IntegerField(min_value=1)
     order = serializers.IntegerField(min_value=1)
 
 
 class ReorderExamQuestionsSerializer(serializers.Serializer):
     items = ReorderItemSerializer(many=True, allow_empty=False)
+
+    def validate_items(self, value):
+        ids = [item['exam_question_id'] for item in value]
+        if len(ids) != len(set(ids)):
+            raise serializers.ValidationError('Duplicate exam_question_id values.')
+        orders = [item['order'] for item in value]
+        if len(orders) != len(set(orders)):
+            raise serializers.ValidationError('Duplicate order values.')
+        return value

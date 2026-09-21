@@ -1,9 +1,12 @@
+from django.db.models.deletion import ProtectedError
 from django.shortcuts import get_object_or_404
 from rest_framework import mixins, status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from config.exceptions import ConflictError
+from config.utils import parse_positive_int
 from exam.models import (
     Difficulty,
     Exam,
@@ -22,7 +25,6 @@ from exam.serializers import (
     QuestionGenerationJobSerializer,
     QuestionSerializer,
     ReorderExamQuestionsSerializer,
-    UpdateExamQuestionSerializer,
 )
 from exam.services import ExamService, QuestionGenerationService
 
@@ -41,9 +43,13 @@ class QuestionGenerationJobViewSet(
     pagination_class = None
 
     def get_queryset(self):
-        return QuestionGenerationJob.objects.filter(
-            created_by=self.request.user,
-        ).select_related('grade', 'subject')
+        return (
+            QuestionGenerationJob.objects.filter(
+                created_by=self.request.user,
+            )
+            .select_related('grade', 'subject')
+            .prefetch_related('questions')
+        )
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -66,6 +72,7 @@ class LabelViewSet(
 ):
     queryset = Label.objects.all()
     serializer_class = LabelSerializer
+    permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post', 'head', 'options']
     pagination_class = None
 
@@ -91,7 +98,7 @@ class QuestionViewSet(viewsets.ModelViewSet):
 
         search = (params.get('search') or '').strip()
         if search:
-            qs = qs.filter(text__icontains=search)
+            qs = qs.filter(text__icontains=search[:200])
 
         question_type = (params.get('question_type') or '').strip().lower()
         if question_type:
@@ -105,23 +112,28 @@ class QuestionViewSet(viewsets.ModelViewSet):
             if difficulty in valid_difficulties:
                 qs = qs.filter(difficulty=difficulty)
 
-        grade = params.get('grade')
-        if grade is not None and grade != '':
-            qs = qs.filter(grade_id=grade)
+        grade_id = parse_positive_int(params.get('grade'))
+        if grade_id is not None:
+            qs = qs.filter(grade_id=grade_id)
 
-        subject = params.get('subject')
-        if subject is not None and subject != '':
-            qs = qs.filter(subject_id=subject)
+        subject_id = parse_positive_int(params.get('subject'))
+        if subject_id is not None:
+            qs = qs.filter(subject_id=subject_id)
 
         generation_job = params.get('generation_job') or params.get('job_id')
-        if generation_job is not None and generation_job != '':
+        job_id = parse_positive_int(generation_job)
+        if job_id is not None:
             # Only the job owner can filter questions by that job.
             qs = qs.filter(
-                generation_job_id=generation_job,
+                generation_job_id=job_id,
                 generation_job__created_by=self.request.user,
             )
 
-        label_ids = params.getlist('label')
+        label_ids = [
+            lid
+            for lid in (parse_positive_int(v) for v in params.getlist('label'))
+            if lid is not None
+        ]
         if label_ids:
             qs = qs.filter(labels__in=label_ids).distinct()
 
@@ -130,8 +142,18 @@ class QuestionViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)
 
+    def perform_destroy(self, instance):
+        try:
+            instance.delete()
+        except ProtectedError:
+            raise ConflictError(
+                'Cannot delete a question that is used on an exam. '
+                'Remove it from exams first.',
+            )
+
 
 class ExamViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
     # put required for reorder-questions action
     http_method_names = ['get', 'post', 'put', 'patch', 'delete', 'head', 'options']
 
@@ -182,23 +204,11 @@ class ExamViewSet(viewsets.ModelViewSet):
 
     @action(
         detail=True,
-        methods=['patch', 'delete'],
+        methods=['delete'],
         url_path=r'exam-questions/(?P<exam_question_id>[0-9]+)',
     )
     def exam_question_detail(self, request, pk=None, exam_question_id=None):
         exam = self.get_object()
         placement = get_object_or_404(ExamQuestion, pk=exam_question_id, exam=exam)
-
-        if request.method == 'DELETE':
-            placement.delete()
-            exam.refresh_totals()
-            return Response(self._serialized_exam(exam))
-
-        serializer = UpdateExamQuestionSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        for key, value in serializer.validated_data.items():
-            setattr(placement, key, value)
-        placement.save()
-        if 'marks' in serializer.validated_data:
-            exam.refresh_totals()
+        ExamService().remove_placement(exam, placement)
         return Response(self._serialized_exam(exam))

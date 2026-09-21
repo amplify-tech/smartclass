@@ -36,4 +36,3 @@ class DocumentSerializer(serializers.ModelSerializer):
             'created_at',
             'updated_at',
         )
-
