@@ -209,23 +209,6 @@ SPECTACULAR_SETTINGS = {
 }
 
 # ---------------------------------------------------------------------------
-# Redis / Celery
-# ---------------------------------------------------------------------------
-REDIS_URL = env('REDIS_URL', 'redis://localhost:6379/0')
-
-CELERY_BROKER_URL = env('CELERY_BROKER_URL', REDIS_URL)
-CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', REDIS_URL)
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
-CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = int(env('CELERY_TASK_TIME_LIMIT', '1800'))
-CELERY_TASK_SOFT_TIME_LIMIT = int(env('CELERY_TASK_SOFT_TIME_LIMIT', '1500'))
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1
-CELERY_TASK_ACKS_LATE = True
-
-# ---------------------------------------------------------------------------
 # LLM (question generation)
 # ---------------------------------------------------------------------------
 # LLM_PROVIDER: local | gemini

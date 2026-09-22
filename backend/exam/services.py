@@ -173,7 +173,7 @@ class QuestionGenerationService:
         logger.info('job created id=%s', job.id)
         from exam.tasks import generate_questions
 
-        generate_questions.delay(job.id)
+        generate_questions(job.id)
         return job
 
     def _get_documents(self, user, document_ids):
