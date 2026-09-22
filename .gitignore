@@ -212,3 +212,5 @@ __marimo__/
 .python-version
 
 node_modules/
+.vercel
+.env*
