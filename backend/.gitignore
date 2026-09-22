@@ -19,3 +19,5 @@ instance/
 
 # Logs
 *.log
+
+media/
