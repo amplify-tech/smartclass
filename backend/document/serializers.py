@@ -55,7 +55,11 @@ class DocumentSerializer(serializers.ModelSerializer):
     def get_file_url(self, obj):
         if not obj.file:
             return None
-        return obj.file.url
+        url = obj.file.url
+        request = self.context.get('request')
+        if request is not None:
+            return request.build_absolute_uri(url)
+        return url
 
     def validate_file(self, value):
         raw_content_type = getattr(value, 'content_type', None) or ''

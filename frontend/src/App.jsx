@@ -6,6 +6,7 @@ import AppLayout from './components/layout/AppLayout'
 import { CatalogProvider } from './contexts/CatalogContext'
 import AuthPage from './pages/AuthPage'
 import CreateExamPage from './pages/CreateExamPage'
+import DocumentUploadPage from './pages/DocumentUploadPage'
 import DocumentsPage from './pages/DocumentsPage'
 import ExamPaperBuilderPage from './pages/ExamPaperBuilderPage'
 import ExamPreviewPage from './pages/ExamPreviewPage'
@@ -69,6 +70,7 @@ function App() {
             />
 
             <Route path="/documents" element={<DocumentsPage />} />
+            <Route path="/documents/upload" element={<DocumentUploadPage />} />
             <Route path="/ppts" element={<PptsPage />} />
           </Route>
         </Route>
