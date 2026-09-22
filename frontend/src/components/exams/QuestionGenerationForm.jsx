@@ -5,7 +5,10 @@ import { useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
 import { listDocuments } from '../../api/documents'
-import { createQuestionGenerationJob } from '../../api/questionGeneration'
+import {
+  createQuestionGenerationJob,
+  getLatestQuestionGenerationJobId,
+} from '../../api/questionGeneration'
 import { useCatalog } from '../../contexts/CatalogContext'
 import { applyApiErrors, getApiErrorMessage } from '../../utils/apiErrors'
 import {
@@ -132,10 +135,22 @@ export default function QuestionGenerationForm() {
     }
 
     try {
-      const { data } = await createQuestionGenerationJob(payload)
-      navigate(`/generation-tasks/${encodeURIComponent(data.id)}`, {
+      // Creation can take 10–60s; do not wait for it. The job row is created
+      // immediately on the server before generation runs.
+      createQuestionGenerationJob(payload).catch(() => {})
+
+      await new Promise((resolve) => setTimeout(resolve, 1200))
+
+      const jobId = await getLatestQuestionGenerationJobId()
+      if (!jobId) {
+        setError('root', {
+          message: 'Could not find the generation job. Please try again.',
+        })
+        return
+      }
+
+      navigate(`/generation-tasks/${encodeURIComponent(jobId)}`, {
         replace: true,
-        state: { job: data },
       })
     } catch (err) {
       applyApiErrors(err, setError, {

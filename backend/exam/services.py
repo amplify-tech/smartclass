@@ -164,15 +164,18 @@ class ExamService:
 class QuestionGenerationService:
     def create_job(self, user, data: dict):
         document_ids = data.pop('document_ids', []) or []
+        
+        job = QuestionGenerationJob.objects.create(created_by=user, **data)
+
         documents = self._get_documents(user, document_ids)
 
-        job = QuestionGenerationJob.objects.create(created_by=user, **data)
         if documents:
             job.documents.set(documents)
 
         logger.info('job created id=%s', job.id)
         from exam.tasks import generate_questions
 
+        #  CELERY_TODO : can use .delay() here 
         generate_questions(job.id)
         return job
 
