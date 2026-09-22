@@ -8,7 +8,6 @@ Self-learning project for System Design and AI Engineering.
 
 ## Stack
 - Django + DRF + PostgreSQL
-- Redis , celery
 - React + Vite
 - JWT
 - AI: LLM, RAG, embeddings
@@ -21,7 +20,7 @@ use logger but concise message only
 
 ### Layers (use when useful, not by default)
 - plain CRUD → ViewSet + serializer + ORM
-- **service** → orchestration only (Celery, RAG/LLM, multi-step flows)
+- **service** → orchestration only (RAG/LLM, multi-step flows)
 - **repository** → only for non-trivial query/persistence helpers (skip for simple ORM)
 
 Useful patterns when they solve something:

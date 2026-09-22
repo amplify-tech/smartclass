@@ -21,7 +21,7 @@ class QuestionType(models.TextChoices):
 
 
 class QuestionGenerationJob(models.Model):
-    """One teacher request to generate questions (async via Celery)."""
+    """One teacher request to generate questions."""
 
     class Status(models.TextChoices):
         PENDING = 'pending', 'Pending'

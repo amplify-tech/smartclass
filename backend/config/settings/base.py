@@ -148,6 +148,7 @@ AWS_SECRET_ACCESS_KEY = env('AWS_SECRET_ACCESS_KEY')
 AWS_STORAGE_BUCKET_NAME = env('AWS_STORAGE_BUCKET_NAME') or None
 AWS_S3_ENDPOINT_URL = env('AWS_S3_ENDPOINT_URL') or None
 AWS_S3_REGION_NAME = env('AWS_S3_REGION_NAME') or None
+AWS_S3_CUSTOM_DOMAIN = env("AWS_S3_CUSTOM_DOMAIN")
 
 AWS_S3_FILE_OVERWRITE = False
 AWS_DEFAULT_ACL = None
@@ -206,23 +207,6 @@ SPECTACULAR_SETTINGS = {
     'VERSION': '1.0.0',
     'SERVE_INCLUDE_SCHEMA': False,
 }
-
-# ---------------------------------------------------------------------------
-# Redis / Celery
-# ---------------------------------------------------------------------------
-REDIS_URL = env('REDIS_URL', 'redis://localhost:6379/0')
-
-CELERY_BROKER_URL = env('CELERY_BROKER_URL', REDIS_URL)
-CELERY_RESULT_BACKEND = env('CELERY_RESULT_BACKEND', REDIS_URL)
-CELERY_ACCEPT_CONTENT = ['json']
-CELERY_TASK_SERIALIZER = 'json'
-CELERY_RESULT_SERIALIZER = 'json'
-CELERY_TIMEZONE = TIME_ZONE
-CELERY_TASK_TRACK_STARTED = True
-CELERY_TASK_TIME_LIMIT = int(env('CELERY_TASK_TIME_LIMIT', '1800'))
-CELERY_TASK_SOFT_TIME_LIMIT = int(env('CELERY_TASK_SOFT_TIME_LIMIT', '1500'))
-CELERY_WORKER_PREFETCH_MULTIPLIER = 1
-CELERY_TASK_ACKS_LATE = True
 
 # ---------------------------------------------------------------------------
 # LLM (question generation)
