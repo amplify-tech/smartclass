@@ -43,9 +43,16 @@ class SubjectViewSet(
         return [IsAuthenticated()]
 
 
-class DocumentViewSet(viewsets.ReadOnlyModelViewSet):
+class DocumentViewSet(
+    mixins.ListModelMixin,
+    mixins.CreateModelMixin,
+    mixins.RetrieveModelMixin,
+    mixins.DestroyModelMixin,
+    viewsets.GenericViewSet,
+):
     serializer_class = DocumentSerializer
     permission_classes = [IsAuthenticated]
+    http_method_names = ['get', 'post', 'delete', 'head', 'options']
     pagination_class = None
 
     def get_queryset(self):
@@ -55,3 +62,11 @@ class DocumentViewSet(viewsets.ReadOnlyModelViewSet):
             'grade',
             'subject',
         )
+
+    def perform_create(self, serializer):
+        serializer.save(uploaded_by=self.request.user)
+
+    def perform_destroy(self, instance):
+        if instance.file:
+            instance.file.delete(save=False)
+        instance.delete()

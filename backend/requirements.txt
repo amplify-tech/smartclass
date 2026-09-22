@@ -5,6 +5,7 @@ django-cors-headers
 drf-spectacular
 psycopg2-binary
 python-dotenv
+django-storages[boto3]
 celery[redis]
 redis
 requests
