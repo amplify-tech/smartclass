@@ -5,10 +5,7 @@ import { useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
 import { listDocuments } from '../../api/documents'
-import {
-  createQuestionGenerationJob,
-  getLatestQuestionGenerationJobId,
-} from '../../api/questionGeneration'
+import { createQuestionGenerationJob } from '../../api/questionGeneration'
 import { useCatalog } from '../../contexts/CatalogContext'
 import { applyApiErrors, getApiErrorMessage } from '../../utils/apiErrors'
 import {
@@ -81,12 +78,12 @@ export default function QuestionGenerationForm() {
   } = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
-      grade: '',
-      subject: '',
+      grade: grades[0]?.id ?? '',
+      subject: subjects[0]?.id ?? '',
       difficulty: '',
-      total_marks: 20,
-      mcq: 2,
-      short: 2,
+      total_marks: 4,
+      mcq: 0,
+      short: 1,
       long: 0,
       description: '',
       document_ids: [],
@@ -135,22 +132,18 @@ export default function QuestionGenerationForm() {
     }
 
     try {
-      // Creation can take 10–60s; do not wait for it. The job row is created
-      // immediately on the server before generation runs.
-      createQuestionGenerationJob(payload).catch(() => {})
-
-      await new Promise((resolve) => setTimeout(resolve, 1200))
-
-      const jobId = await getLatestQuestionGenerationJobId()
+      const { data: job } = await createQuestionGenerationJob(payload)
+      const jobId = job?.id
       if (!jobId) {
         setError('root', {
-          message: 'Could not find the generation job. Please try again.',
+          message: 'Could not start generation. Please try again.',
         })
         return
       }
 
       navigate(`/generation-tasks/${encodeURIComponent(jobId)}`, {
         replace: true,
+        state: { job },
       })
     } catch (err) {
       applyApiErrors(err, setError, {

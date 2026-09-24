@@ -61,22 +61,6 @@ class QuestionGenerationJobViewSet(
             status=status.HTTP_201_CREATED,
         )
 
-    @action(detail=False, methods=['get'], url_path='latest')
-    def latest(self, request):
-        """Return only the current user's most recent generation job id."""
-        job_id = (
-            self.get_queryset()
-            .order_by('-id')
-            .values_list('id', flat=True)
-            .first()
-        )
-        if job_id is None:
-            return Response(
-                {'detail': 'No generation jobs found.'},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        return Response({'id': job_id})
-
 
 class LabelViewSet(
     mixins.ListModelMixin,
