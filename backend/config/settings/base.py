@@ -52,6 +52,7 @@ INSTALLED_APPS = [
     'user',
     'document',
     'exam',
+    'task',
 ]
 
 MIDDLEWARE = [
@@ -185,7 +186,7 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
-    'DEFAULT_PAGINATION_CLASS': 'config.pagination.StandardPagination',
+    'DEFAULT_PAGINATION_CLASS': 'common.pagination.StandardPagination',
     'PAGE_SIZE': 20,
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }

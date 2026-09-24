@@ -1,8 +1,8 @@
 from django.db import transaction
 from rest_framework import serializers
 
-from config.exceptions import ConflictError
-from config.utils import dedupe_preserve_order
+from common.exceptions import ConflictError
+from common.utils import dedupe_preserve_order
 from exam.constants import (
     MAX_DOCUMENTS_PER_JOB,
     MAX_EXAM_DURATION_MINUTES,

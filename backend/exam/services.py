@@ -6,8 +6,8 @@ from django.db.models import Max
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from config.exceptions import ConflictError
-from config.utils import dedupe_preserve_order
+from common.exceptions import ConflictError
+from common.utils import dedupe_preserve_order
 from document.models import Document
 from exam.llm import get_llm_provider
 from exam.models import (

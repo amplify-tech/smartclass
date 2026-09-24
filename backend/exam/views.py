@@ -5,8 +5,8 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from config.exceptions import ConflictError
-from config.utils import parse_positive_int
+from common.exceptions import ConflictError
+from common.utils import parse_positive_int
 from exam.models import (
     Difficulty,
     Exam,
