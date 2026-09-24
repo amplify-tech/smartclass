@@ -5,15 +5,18 @@ import logging
 from django.db import close_old_connections
 from django.utils import timezone
 
-from common.constants import MAX_RETRIES
+from common.constants import GENERATE_QUESTIONS, MAX_RETRIES
+from common.exceptions import TaskFailed
 from exam.tasks import generate_questions
 from .models import Job
 
 logger = logging.getLogger(__name__)
 
 TASK_HANDLER_MAPPING = {
-    'GENERATE_QUESTIONS': generate_questions,
+    GENERATE_QUESTIONS: generate_questions,
 }
+
+_GENERIC_TASK_ERROR = 'Task failed. Please try again.'
 
 
 class JobAuthorizationError(PermissionError):
@@ -23,19 +26,19 @@ class JobAuthorizationError(PermissionError):
 def run_job(job_id, request_user_id=None):
     """Worker entrypoint"""
     close_old_connections()
-    
+
     try:
         job = Job.objects.get(id=job_id)
     except Job.DoesNotExist:
         logger.error('run_job missing job_id=%s', job_id)
         return
 
-    if job.status in [ Job.Status.RUNNING, Job.Status.COMPLETED]:
-        logger.info(f'job_id={job_id} already {job.status.value}')
+    if job.status in (Job.Status.RUNNING, Job.Status.COMPLETED):
+        logger.info('job_id=%s already %s', job_id, job.status)
         return
 
     if job.retry_count >= MAX_RETRIES:
-        logger.error(f'job_id={job_id} reached max retries')
+        logger.error('job_id=%s reached max retries', job_id)
         return
 
     try:
@@ -48,9 +51,10 @@ def run_job(job_id, request_user_id=None):
 
         handler = TASK_HANDLER_MAPPING.get(job.task_type)
         if not handler:
-            raise ValueError(f'Unknown task type: {job.task_type}')
+            logger.error('unknown task_type=%s job_id=%s', job.task_type, job_id)
+            raise TaskFailed(_GENERIC_TASK_ERROR)
 
-        result = handler(**(job.payload or {}))
+        result = handler(job_id=job.id, **(job.payload or {}))
 
         job.status = Job.Status.COMPLETED
         job.result = result
@@ -60,17 +64,24 @@ def run_job(job_id, request_user_id=None):
 
     except JobAuthorizationError as exc:
         job.status = Job.Status.FAILED
-        job.error = str(exc)
+        job.error = _GENERIC_TASK_ERROR
         job.completed_at = timezone.now()
         job.save(update_fields=['status', 'error', 'completed_at'])
         logger.warning('job_id=%s auth failed: %s', job_id, exc)
 
-    except Exception as exc:
+    except TaskFailed as exc:
         job.status = Job.Status.FAILED
-        job.error = str(exc)
+        job.error = exc.user_message
         job.completed_at = timezone.now()
         job.save(update_fields=['status', 'error', 'completed_at'])
-        logger.exception('job_id=%s failed: %s', job_id, exc)
+        logger.warning('job_id=%s failed safely: %s', job_id, exc.user_message)
+
+    except Exception:
+        job.status = Job.Status.FAILED
+        job.error = _GENERIC_TASK_ERROR
+        job.completed_at = timezone.now()
+        job.save(update_fields=['status', 'error', 'completed_at'])
+        logger.exception('job_id=%s failed', job_id)
 
     finally:
         close_old_connections()

@@ -6,7 +6,6 @@ from .models import (
     Label,
     Option,
     Question,
-    QuestionGenerationJob,
 )
 
 
@@ -27,22 +26,6 @@ class ExamQuestionInline(admin.TabularInline):
 class LabelAdmin(admin.ModelAdmin):
     list_display = ('id', 'name')
     search_fields = ('name',)
-
-
-@admin.register(QuestionGenerationJob)
-class QuestionGenerationJobAdmin(admin.ModelAdmin):
-    list_display = (
-        'id',
-        'grade',
-        'subject',
-        'difficulty',
-        'status',
-        'created_by',
-        'created_at',
-    )
-    list_filter = ('status', 'difficulty', 'grade', 'subject')
-    raw_id_fields = ('created_by',)
-    filter_horizontal = ('documents',)
 
 
 @admin.register(Question)

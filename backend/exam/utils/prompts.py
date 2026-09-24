@@ -41,15 +41,16 @@ Output schema:
 """
 
 
-def build_user_prompt(job) -> str:
-    type_counts = job.question_types if isinstance(job.question_types, dict) else {}
+def build_user_prompt(*, grade_name, subject_name, difficulty, total_marks,
+                      question_types, description) -> str:
+    type_counts = question_types if isinstance(question_types, dict) else {}
     total = sum(type_counts.values()) if type_counts else 0
     return (
-        f'Grade: {job.grade.name}\n'
-        f'Subject: {job.subject.name}\n'
-        f'Difficulty: {job.difficulty}\n'
-        f'Total marks: {job.total_marks}\n'
+        f'Grade: {grade_name}\n'
+        f'Subject: {subject_name}\n'
+        f'Difficulty: {difficulty}\n'
+        f'Total marks: {total_marks}\n'
         f'Question types: {json.dumps(type_counts)}\n'
-        f'Teacher instruction: {job.description or "(none)"}\n'
+        f'Teacher instruction: {description or "(none)"}\n'
         f'Generate exactly {total} questions.'
     )

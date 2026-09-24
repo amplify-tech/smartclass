@@ -20,61 +20,6 @@ class QuestionType(models.TextChoices):
     LONG = 'long', 'Long answer'
 
 
-class QuestionGenerationJob(models.Model):
-    """One teacher request to generate questions."""
-
-    class Status(models.TextChoices):
-        PENDING = 'pending', 'Pending'
-        RUNNING = 'running', 'Running'
-        COMPLETED = 'completed', 'Completed'
-        FAILED = 'failed', 'Failed'
-
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
-        related_name='question_generation_jobs',
-    )
-    grade = models.ForeignKey(
-        Grade,
-        on_delete=models.PROTECT,
-        related_name='generation_jobs',
-    )
-    subject = models.ForeignKey(
-        Subject,
-        on_delete=models.PROTECT,
-        related_name='generation_jobs',
-    )
-    difficulty = models.CharField(max_length=16, choices=Difficulty.choices)
-    total_marks = models.PositiveSmallIntegerField()
-    question_types = models.JSONField(
-        help_text='Counts per type, e.g. {"mcq": 2, "short": 3}',
-    )
-    description = models.TextField(
-        blank=True,
-        help_text='Teacher prompt used by the LLM when generating questions.',
-    )
-    documents = models.ManyToManyField(
-        Document,
-        blank=True,
-        related_name='generation_jobs',
-    )
-    status = models.CharField(
-        max_length=16,
-        choices=Status.choices,
-        default=Status.PENDING,
-    )
-    error_message = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        db_table = 'question_generation_jobs'
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f'Job {self.pk} ({self.status})'
-
-
 class Label(models.Model):
     """Topic tag for bank questions, e.g. optics, electricity."""
 
@@ -122,11 +67,11 @@ class Question(models.Model):
         related_name='questions',
     )
     generation_job = models.ForeignKey(
-        QuestionGenerationJob,
+        'task.Job',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='questions',
+        related_name='generated_questions',
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,

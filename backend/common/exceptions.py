@@ -12,3 +12,11 @@ class ConflictError(APIException):
         'The request conflicts with the current state of the resource.'
     )
     default_code = 'conflict'
+
+
+class TaskFailed(Exception):
+    """Handler failure with a client-safe message for the task runner."""
+
+    def __init__(self, user_message: str):
+        self.user_message = user_message
+        super().__init__(user_message)

@@ -13,14 +13,16 @@ from exam.constants import (
     MIN_MCQ_OPTIONS,
 )
 from exam.models import (
+    Difficulty,
     Exam,
     ExamQuestion,
     Label,
     Option,
     Question,
-    QuestionGenerationJob,
     QuestionType,
 )
+from document.models import Grade, Subject
+from task.models import Job
 
 
 class LabelSerializer(serializers.ModelSerializer):
@@ -254,7 +256,20 @@ class QuestionSerializer(serializers.ModelSerializer):
         return question
 
 
-class QuestionGenerationJobSerializer(serializers.ModelSerializer):
+class QuestionGenerationJobSerializer(serializers.Serializer):
+    """Validate create payload; represent task.Job in the legacy API shape."""
+
+    id = serializers.IntegerField(read_only=True)
+    grade = serializers.PrimaryKeyRelatedField(queryset=Grade.objects.all())
+    subject = serializers.PrimaryKeyRelatedField(queryset=Subject.objects.all())
+    difficulty = serializers.ChoiceField(choices=Difficulty.choices)
+    total_marks = serializers.IntegerField(min_value=1, max_value=MAX_MARKS)
+    question_types = serializers.DictField()
+    description = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default='',
+    )
     document_ids = serializers.ListField(
         child=serializers.IntegerField(min_value=1),
         write_only=True,
@@ -262,40 +277,17 @@ class QuestionGenerationJobSerializer(serializers.ModelSerializer):
         default=list,
         max_length=MAX_DOCUMENTS_PER_JOB,
     )
-    question_ids = serializers.PrimaryKeyRelatedField(
-        source='questions',
-        many=True,
+    status = serializers.CharField(read_only=True)
+    error_message = serializers.CharField(read_only=True)
+    question_ids = serializers.ListField(
+        child=serializers.IntegerField(),
         read_only=True,
     )
-
-    class Meta:
-        model = QuestionGenerationJob
-        fields = (
-            'id',
-            'grade',
-            'subject',
-            'difficulty',
-            'total_marks',
-            'question_types',
-            'description',
-            'document_ids',
-            'status',
-            'error_message',
-            'question_ids',
-            'created_at',
-            'completed_at',
-        )
-        read_only_fields = (
-            'id',
-            'status',
-            'error_message',
-            'question_ids',
-            'created_at',
-            'completed_at',
-        )
-        extra_kwargs = {
-            'total_marks': {'min_value': 1, 'max_value': MAX_MARKS},
-        }
+    created_at = serializers.DateTimeField(read_only=True)
+    completed_at = serializers.DateTimeField(
+        read_only=True,
+        allow_null=True,
+    )
 
     def validate_description(self, value):
         return (value or '').strip()
@@ -328,6 +320,36 @@ class QuestionGenerationJobSerializer(serializers.ModelSerializer):
                 f'total questions cannot exceed {MAX_QUESTIONS_PER_JOB}',
             )
         return cleaned
+
+    def to_representation(self, instance):
+        """Flatten task.Job (+ payload/result) for existing React clients."""
+        if not isinstance(instance, Job):
+            return super().to_representation(instance)
+
+        payload = instance.payload or {}
+        result = instance.result or {}
+        question_ids = result.get('question_ids')
+        if question_ids is None:
+            question_ids = list(
+                Question.objects.filter(
+                    generation_job_id=instance.pk,
+                ).values_list('id', flat=True),
+            )
+
+        return {
+            'id': instance.id,
+            'grade': payload.get('grade'),
+            'subject': payload.get('subject'),
+            'difficulty': payload.get('difficulty'),
+            'total_marks': payload.get('total_marks'),
+            'question_types': payload.get('question_types') or {},
+            'description': payload.get('description') or '',
+            'status': instance.status,
+            'error_message': instance.error or '',
+            'question_ids': question_ids,
+            'created_at': instance.created_at,
+            'completed_at': instance.completed_at,
+        }
 
 
 class ExamQuestionSerializer(serializers.ModelSerializer):

@@ -5,6 +5,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
+from common.constants import GENERATE_QUESTIONS
 from common.exceptions import ConflictError
 from common.utils import parse_positive_int
 from exam.models import (
@@ -13,7 +14,6 @@ from exam.models import (
     ExamQuestion,
     Label,
     Question,
-    QuestionGenerationJob,
     QuestionType,
 )
 from exam.permissions import IsOwnerOrReadOnly
@@ -27,6 +27,7 @@ from exam.serializers import (
     ReorderExamQuestionsSerializer,
 )
 from exam.services import ExamService, QuestionGenerationService
+from task.models import Job
 
 
 class QuestionGenerationJobViewSet(
@@ -35,7 +36,7 @@ class QuestionGenerationJobViewSet(
     mixins.RetrieveModelMixin,
     viewsets.GenericViewSet,
 ):
-    """Jobs are scoped to the authenticated owner only (list + retrieve)."""
+    """Façade over task.Job for GENERATE_QUESTIONS (owner-scoped)."""
 
     serializer_class = QuestionGenerationJobSerializer
     permission_classes = [IsAuthenticated]
@@ -43,12 +44,9 @@ class QuestionGenerationJobViewSet(
     pagination_class = None
 
     def get_queryset(self):
-        return (
-            QuestionGenerationJob.objects.filter(
-                created_by=self.request.user,
-            )
-            .select_related('grade', 'subject')
-            .prefetch_related('questions')
+        return Job.objects.filter(
+            created_by=self.request.user,
+            task_type=GENERATE_QUESTIONS,
         )
 
     def create(self, request, *args, **kwargs):
@@ -65,9 +63,9 @@ class QuestionGenerationJobViewSet(
 
     @action(detail=False, methods=['get'], url_path='latest')
     def latest(self, request):
-        """Return only the current user's most recent job id."""
+        """Return only the current user's most recent generation job id."""
         job_id = (
-            QuestionGenerationJob.objects.filter(created_by=request.user)
+            self.get_queryset()
             .order_by('-id')
             .values_list('id', flat=True)
             .first()

@@ -3,24 +3,25 @@ import logging
 
 from django.db import transaction
 from django.db.models import Max
-from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from common.exceptions import ConflictError
+from common.constants import GENERATE_QUESTIONS
+from common.exceptions import ConflictError, TaskFailed
 from common.utils import dedupe_preserve_order
-from document.models import Document
+from document.models import Document, Grade, Subject
 from exam.llm import get_llm_provider
 from exam.models import (
     Exam,
     ExamQuestion,
     Option,
     Question,
-    QuestionGenerationJob,
     QuestionType,
 )
 from exam.utils.labels import resolve_labels
 from exam.utils.llm_json import parse_questions
 from exam.utils.prompts import SYSTEM_PROMPT, build_user_prompt
+from task.models import Job
+from task.services import create_and_submit_job
 
 logger = logging.getLogger(__name__)
 
@@ -163,20 +164,28 @@ class ExamService:
 
 class QuestionGenerationService:
     def create_job(self, user, data: dict):
-        document_ids = data.pop('document_ids', []) or []
-        
-        job = QuestionGenerationJob.objects.create(created_by=user, **data)
+        """Validate docs, persist a task.Job, enqueue background generation."""
+        document_ids = list(data.get('document_ids') or [])
+        self._get_documents(user, document_ids)
 
-        documents = self._get_documents(user, document_ids)
+        grade = data['grade']
+        subject = data['subject']
+        payload = {
+            'grade': grade.pk,
+            'subject': subject.pk,
+            'difficulty': data['difficulty'],
+            'total_marks': data['total_marks'],
+            'question_types': data['question_types'],
+            'description': data.get('description') or '',
+            'document_ids': document_ids,
+        }
 
-        if documents:
-            job.documents.set(documents)
-
-        logger.info('job created id=%s', job.id)
-        from exam.tasks import generate_questions
-
-        #  CELERY_TODO : can use .delay() here 
-        generate_questions(job.id)
+        job = create_and_submit_job(
+            task_type=GENERATE_QUESTIONS,
+            payload=payload,
+            request_user_id=user.id,
+        )
+        logger.info('generation job created id=%s', job.id)
         return job
 
     def _get_documents(self, user, document_ids):
@@ -198,35 +207,46 @@ class QuestionGenerationService:
             )
         return docs
 
-    def run_generation(self, job_id: int):
+    def run_generation(self, job_id: int, payload: dict):
+        """LLM work for an existing task.Job. Status is owned by task_runner."""
         try:
-            job = QuestionGenerationJob.objects.select_related(
-                'grade', 'subject', 'created_by',
-            ).get(pk=job_id)
-        except QuestionGenerationJob.DoesNotExist:
+            job = Job.objects.select_related('created_by').get(pk=job_id)
+        except Job.DoesNotExist:
             logger.warning('job not found id=%s', job_id)
-            return
-
-        job.status = QuestionGenerationJob.Status.RUNNING
-        job.save(update_fields=['status'])
+            raise TaskFailed(_GENERATION_ERROR_GENERIC)
 
         try:
-            raw = get_llm_provider().generate(SYSTEM_PROMPT, build_user_prompt(job))
-            questions = parse_questions(raw)
-            self._save_questions(job, questions)
+            grade = Grade.objects.get(pk=payload['grade'])
+            subject = Subject.objects.get(pk=payload['subject'])
+        except (Grade.DoesNotExist, Subject.DoesNotExist, KeyError) as exc:
+            logger.exception('invalid generation payload job_id=%s', job_id)
+            raise TaskFailed(_GENERATION_ERROR_GENERIC) from exc
 
-            job.status = QuestionGenerationJob.Status.COMPLETED
-            job.completed_at = timezone.now()
-            job.error_message = ''
-            job.save(update_fields=['status', 'completed_at', 'error_message'])
-            logger.info('job done id=%s count=%s', job_id, len(questions))
+        try:
+            prompt = build_user_prompt(
+                grade_name=grade.name,
+                subject_name=subject.name,
+                difficulty=payload.get('difficulty'),
+                total_marks=payload.get('total_marks'),
+                question_types=payload.get('question_types') or {},
+                description=payload.get('description') or '',
+            )
+            raw = get_llm_provider().generate(SYSTEM_PROMPT, prompt)
+            questions = parse_questions(raw)
+            question_ids = self._save_questions(
+                job=job,
+                grade=grade,
+                subject=subject,
+                difficulty=payload.get('difficulty'),
+                items=questions,
+            )
+            logger.info('job done id=%s count=%s', job_id, len(question_ids))
+            return {'question_ids': question_ids}
+        except TaskFailed:
+            raise
         except Exception as exc:
             logger.exception('job failed id=%s', job_id)
-            job.status = QuestionGenerationJob.Status.FAILED
-            job.error_message = self._safe_error_message(exc)
-            job.completed_at = timezone.now()
-            job.save(update_fields=['status', 'error_message', 'completed_at'])
-            raise
+            raise TaskFailed(self._safe_error_message(exc)) from exc
 
     @staticmethod
     def _safe_error_message(exc: Exception) -> str:
@@ -240,23 +260,25 @@ class QuestionGenerationService:
         return _GENERATION_ERROR_GENERIC
 
     @transaction.atomic
-    def _save_questions(self, job, items):
-        job.questions.all().delete()
+    def _save_questions(self, *, job, grade, subject, difficulty, items):
+        Question.objects.filter(generation_job=job).delete()
 
+        question_ids = []
         for item in items:
             options = item.get('options') or []
             label_names = item.get('labels') or []
             question = Question.objects.create(
                 question_type=item['question_type'],
                 text=item['text'],
-                difficulty=item.get('difficulty') or job.difficulty,
+                difficulty=item.get('difficulty') or difficulty,
                 marks=item['marks'],
-                grade=job.grade,
-                subject=job.subject,
+                grade=grade,
+                subject=subject,
                 correct_answer=item.get('correct_answer', ''),
                 generation_job=job,
                 created_by=job.created_by,
             )
+            question_ids.append(question.id)
             if label_names:
                 question.labels.set(resolve_labels(label_names))
             if question.question_type == QuestionType.MCQ:
@@ -269,3 +291,4 @@ class QuestionGenerationService:
                     )
                     for index, opt in enumerate(options, start=1)
                 ])
+        return question_ids
