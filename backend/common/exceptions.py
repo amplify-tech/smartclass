@@ -17,6 +17,6 @@ class ConflictError(APIException):
 class TaskFailed(Exception):
     """Handler failure with a client-safe message for the task runner."""
 
-    def __init__(self, user_message: str):
+    def __init__(self, user_message):
         self.user_message = user_message
         super().__init__(user_message)

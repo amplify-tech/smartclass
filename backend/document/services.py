@@ -2,8 +2,6 @@
 
 Embeddings and retrieval are intentionally out of scope here.
 """
-from __future__ import annotations
-
 import logging
 from pathlib import Path
 
@@ -12,7 +10,7 @@ from django.db import transaction
 from common.constants import RAG_CHUNK_OVERLAP, RAG_CHUNK_SIZE
 from document.models import Document, DocumentChunk
 from document.utils.extractors import FileExtractionError, extract_pages
-from document.utils.rag_text_chunker import TextChunk, chunk_document_pages_for_rag
+from document.utils.rag_text_chunker import chunk_document_pages_for_rag
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +24,11 @@ class DocumentProcessingService:
 
     def extract_and_chunk_for_rag(
         self,
-        document: Document,
+        document,
         *,
-        chunk_size: int = RAG_CHUNK_SIZE,
-        chunk_overlap: int = RAG_CHUNK_OVERLAP,
-    ) -> list[TextChunk]:
+        chunk_size=RAG_CHUNK_SIZE,
+        chunk_overlap=RAG_CHUNK_OVERLAP,
+    ):
         """Extract text and return ordered chunks (no DB writes)."""
         data = self._read_file_bytes(document)
         filename = Path(document.file.name).name if document.file else ''
@@ -52,11 +50,11 @@ class DocumentProcessingService:
 
     def process_document_for_rag(
         self,
-        document_id: int,
+        document_id,
         *,
-        chunk_size: int = RAG_CHUNK_SIZE,
-        chunk_overlap: int = RAG_CHUNK_OVERLAP,
-    ) -> list[TextChunk]:
+        chunk_size=RAG_CHUNK_SIZE,
+        chunk_overlap=RAG_CHUNK_OVERLAP,
+    ):
         """Extract, chunk, replace stored chunks, and update document status."""
         try:
             document = Document.objects.get(pk=document_id)
@@ -109,7 +107,7 @@ class DocumentProcessingService:
             ) from exc
 
     @staticmethod
-    def _read_file_bytes(document: Document) -> bytes:
+    def _read_file_bytes(document):
         if not document.file:
             raise DocumentProcessingError('Document has no file attached.')
 

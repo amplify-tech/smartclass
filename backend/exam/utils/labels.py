@@ -5,7 +5,7 @@ from django.db.models import Q
 from exam.models import Label
 
 
-def resolve_labels(names: list[str]) -> list[Label]:
+def resolve_labels(names):
     """Return Label rows for names (case-insensitive), creating missing ones."""
     cleaned = []
     seen = set()

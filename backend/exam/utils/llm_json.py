@@ -8,7 +8,7 @@ VALID_TYPES = {c.value for c in QuestionType}
 VALID_DIFFICULTY = {c.value for c in Difficulty}
 
 
-def parse_questions(raw: str) -> list[dict]:
+def parse_questions(raw):
     data = _extract_json(raw)
     questions = data.get('questions')
     if not isinstance(questions, list) or not questions:
@@ -17,7 +17,7 @@ def parse_questions(raw: str) -> list[dict]:
     return [_clean_question(q) for q in questions]
 
 
-def _extract_json(raw: str) -> dict:
+def _extract_json(raw):
     text = (raw or '').strip()
     if not text:
         raise ValueError('empty llm output')
@@ -38,7 +38,7 @@ def _extract_json(raw: str) -> dict:
     return data
 
 
-def _clean_question(item: dict) -> dict:
+def _clean_question(item):
     q_type = str(item.get('question_type', '')).lower()
     if q_type not in VALID_TYPES:
         raise ValueError(f'bad question_type: {q_type}')
@@ -79,7 +79,7 @@ def _clean_question(item: dict) -> dict:
     }
 
 
-def _clean_labels(raw) -> list[str]:
+def _clean_labels(raw):
     if raw is None:
         return []
     if isinstance(raw, str):
@@ -104,7 +104,7 @@ def _clean_labels(raw) -> list[str]:
     return cleaned
 
 
-def _clean_options(options) -> list[dict]:
+def _clean_options(options):
     if not isinstance(options, list) or len(options) < 2:
         raise ValueError('mcq needs options')
 

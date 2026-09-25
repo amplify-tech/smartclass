@@ -163,7 +163,7 @@ class ExamService:
 
 
 class QuestionGenerationService:
-    def create_job(self, user, data: dict):
+    def create_job(self, user, data):
         """Validate docs, persist a task.Job, enqueue background generation."""
         document_ids = list(data.get('document_ids') or [])
         self._get_documents(user, document_ids)
@@ -207,7 +207,7 @@ class QuestionGenerationService:
             )
         return docs
 
-    def run_generation(self, job_id: int, payload: dict):
+    def run_generation(self, job_id, payload):
         """LLM work for an existing task.Job. Status is owned by task_runner."""
         try:
             job = Job.objects.select_related('created_by').get(pk=job_id)
@@ -253,7 +253,7 @@ class QuestionGenerationService:
             raise TaskFailed(self._safe_error_message(exc)) from exc
 
     @staticmethod
-    def _safe_error_message(exc: Exception) -> str:
+    def _safe_error_message(exc):
         """Return a client-safe message; never expose raw exception text."""
         if isinstance(exc, (ValueError, TypeError, KeyError)):
             return _GENERATION_ERROR_PARSE

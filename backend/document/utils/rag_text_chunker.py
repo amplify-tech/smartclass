@@ -1,6 +1,4 @@
 """Normalize extracted text and split it into overlapping RAG chunks."""
-from __future__ import annotations
-
 import re
 from dataclasses import dataclass
 
@@ -17,7 +15,7 @@ class TextChunk:
     chunk_index: int
 
 
-def normalize_text_for_rag(text: str) -> str:
+def normalize_text_for_rag(text):
     """Collapse noisy whitespace while keeping paragraph breaks."""
     if not text:
         return ''
@@ -27,7 +25,7 @@ def normalize_text_for_rag(text: str) -> str:
     return cleaned.strip()
 
 
-def _validate_chunk_params(chunk_size: int, chunk_overlap: int) -> None:
+def _validate_chunk_params(chunk_size, chunk_overlap):
     if chunk_size <= 0:
         raise ValueError('chunk_size must be a positive integer.')
     if chunk_overlap < 0:
@@ -37,20 +35,20 @@ def _validate_chunk_params(chunk_size: int, chunk_overlap: int) -> None:
 
 
 def chunk_text_for_rag(
-    text: str,
+    text,
     *,
-    page_number: int | None = None,
-    chunk_size: int,
-    chunk_overlap: int,
-    start_index: int = 0,
-) -> list[TextChunk]:
+    page_number=None,
+    chunk_size,
+    chunk_overlap,
+    start_index=0,
+):
     """Split normalized text into overlapping character windows for RAG."""
     _validate_chunk_params(chunk_size, chunk_overlap)
     normalized = normalize_text_for_rag(text)
     if not normalized:
         return []
 
-    chunks: list[TextChunk] = []
+    chunks = []
     start = 0
     length = len(normalized)
     index = start_index
@@ -75,16 +73,11 @@ def chunk_text_for_rag(
     return chunks
 
 
-def chunk_document_pages_for_rag(
-    pages,
-    *,
-    chunk_size: int,
-    chunk_overlap: int,
-) -> list[TextChunk]:
+def chunk_document_pages_for_rag(pages, *, chunk_size, chunk_overlap):
     """Chunk each extracted page with a global sequential index for RAG."""
     _validate_chunk_params(chunk_size, chunk_overlap)
 
-    all_chunks: list[TextChunk] = []
+    all_chunks = []
     next_index = 0
     for page in pages:
         page_chunks = chunk_text_for_rag(

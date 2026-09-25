@@ -42,7 +42,7 @@ Output schema:
 
 
 def build_user_prompt(*, grade_name, subject_name, difficulty, total_marks,
-                      question_types, description) -> str:
+                      question_types, description):
     type_counts = question_types if isinstance(question_types, dict) else {}
     total = sum(type_counts.values()) if type_counts else 0
     return (
