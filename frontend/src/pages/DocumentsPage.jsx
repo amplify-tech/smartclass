@@ -21,6 +21,7 @@ import {
   DOCUMENT_STATUS_TONES,
 } from '../utils/documentLabels'
 import { formatDateTime } from '../utils/formatDate'
+import { parsePaginatedResponse } from '../utils/pagination'
 
 export default function DocumentsPage() {
   const { grades, subjects } = useCatalog()
@@ -37,7 +38,7 @@ export default function DocumentsPage() {
       try {
         const { data } = await listDocuments()
         if (cancelled) return
-        setDocuments(Array.isArray(data) ? data : [])
+        setDocuments(parsePaginatedResponse(data).results)
         setStatus('ready')
       } catch (err) {
         if (cancelled) return
@@ -64,7 +65,7 @@ export default function DocumentsPage() {
     setError(null)
     listDocuments()
       .then(({ data }) => {
-        setDocuments(Array.isArray(data) ? data : [])
+        setDocuments(parsePaginatedResponse(data).results)
         setStatus('ready')
       })
       .catch((err) => {

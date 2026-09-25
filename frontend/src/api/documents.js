@@ -1,7 +1,12 @@
 import client from './client'
 
-export function listDocuments() {
-  return client.get('/documents/')
+/**
+ * List documents with optional filters and pagination.
+ *
+ * Params: page, page_size, search, grade, subject, doc_type, status, ordering
+ */
+export function listDocuments(params = {}) {
+  return client.get('/documents/', { params })
 }
 
 /**

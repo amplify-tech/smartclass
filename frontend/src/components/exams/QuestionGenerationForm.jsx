@@ -1,15 +1,14 @@
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useEffect, useState } from 'react'
-import { Controller, useForm, useWatch } from 'react-hook-form'
+import { useForm, useWatch } from 'react-hook-form'
 import { useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 
-import { listDocuments } from '../../api/documents'
 import { createQuestionGenerationJob } from '../../api/questionGeneration'
 import { useCatalog } from '../../contexts/CatalogContext'
-import { applyApiErrors, getApiErrorMessage } from '../../utils/apiErrors'
+import { applyApiErrors } from '../../utils/apiErrors'
+import { DOCUMENT_STATUS } from '../../utils/documentLabels'
 import {
-  Alert,
   Box,
   Button,
   FormField,
@@ -18,6 +17,7 @@ import {
   Select,
   Textarea,
 } from '../common_ui'
+import DocumentSelectModal from '../documents/DocumentSelectModal'
 
 const schema = z
   .object({
@@ -34,7 +34,7 @@ const schema = z
     short: z.coerce.number().int().min(0).default(0),
     long: z.coerce.number().int().min(0).default(0),
     description: z.string().optional().or(z.literal('')),
-    document_ids: z.array(z.number().int().positive()).default([]),
+    document_ids: z.array(z.number().int().positive()).max(1).default([]),
   })
   .superRefine((data, ctx) => {
     const total = data.mcq + data.short + data.long
@@ -65,15 +65,15 @@ function buildQuestionTypes({ mcq, short, long }) {
 export default function QuestionGenerationForm() {
   const navigate = useNavigate()
   const { grades, subjects } = useCatalog()
-  const [documents, setDocuments] = useState([])
-  const [documentsStatus, setDocumentsStatus] = useState('loading')
-  const [documentsError, setDocumentsError] = useState(null)
+  const [selectedDocument, setSelectedDocument] = useState(null)
+  const [modalOpen, setModalOpen] = useState(false)
 
   const {
     register,
     control,
     handleSubmit,
     setError,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(schema),
@@ -94,31 +94,10 @@ export default function QuestionGenerationForm() {
   const selectedSubject = useWatch({ control, name: 'subject' })
 
   useEffect(() => {
-    let cancelled = false
-
-    async function loadDocuments() {
-      setDocumentsStatus('loading')
-      setDocumentsError(null)
-      try {
-        const { data } = await listDocuments()
-        if (cancelled) return
-        setDocuments(Array.isArray(data) ? data : [])
-        setDocumentsStatus('ready')
-      } catch (err) {
-        if (cancelled) return
-        setDocuments([])
-        setDocumentsError(
-          getApiErrorMessage(err, 'Failed to load documents'),
-        )
-        setDocumentsStatus('error')
-      }
-    }
-
-    loadDocuments()
-    return () => {
-      cancelled = true
-    }
-  }, [])
+    setSelectedDocument(null)
+    setValue('document_ids', [])
+    setModalOpen(false)
+  }, [selectedGrade, selectedSubject, setValue])
 
   const onSubmit = async (values) => {
     const payload = {
@@ -152,16 +131,18 @@ export default function QuestionGenerationForm() {
     }
   }
 
-  const readyDocuments = documents.filter((doc) => {
-    if (doc.status !== 'ready') return false
-    if (selectedGrade && Number(doc.grade) !== Number(selectedGrade)) return false
-    if (selectedSubject && Number(doc.subject) !== Number(selectedSubject)) {
-      return false
-    }
-    return true
-  })
-
   const isBusy = isSubmitting
+  const canPickDocument = Boolean(selectedGrade && selectedSubject)
+
+  function clearDocument() {
+    setSelectedDocument(null)
+    setValue('document_ids', [])
+  }
+
+  function handleDocumentSelect(doc) {
+    setSelectedDocument(doc)
+    setValue('document_ids', [doc.id], { shouldValidate: true })
+  }
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -263,67 +244,68 @@ export default function QuestionGenerationForm() {
       </FormField>
 
       <Box className="mb-3">
-        <p className="form-label mb-2">Documents (optional)</p>
+        <p className="form-label mb-2">Document (optional)</p>
         {errors.document_ids?.message && (
           <div className="invalid-feedback d-block mb-2">
             {errors.document_ids.message}
           </div>
         )}
-        {documentsStatus === 'error' && (
-          <Alert variant="warning" className="mb-2 py-2">
-            {documentsError} You can still generate without documents.
-          </Alert>
-        )}
-        {!selectedGrade || !selectedSubject ? (
+
+        {!canPickDocument ? (
           <p className="text-muted small mb-0">
-            Select class and subject to see ready documents.
+            Select class and subject to choose a document.
           </p>
-        ) : documentsStatus === 'loading' ? (
-          <p className="text-muted small mb-0">Loading documents…</p>
-        ) : readyDocuments.length === 0 ? (
-          <p className="text-muted small mb-0">
-            No ready documents for this class and subject.
-          </p>
+        ) : selectedDocument ? (
+          <Box className="d-flex flex-wrap align-items-center justify-content-between gap-2 border rounded p-3">
+            <p className="mb-0 fw-medium text-truncate">
+              <span aria-hidden="true" className="me-2">
+                📄
+              </span>
+              {selectedDocument.title}
+            </p>
+            <Box className="d-flex gap-2">
+              <Button
+                type="button"
+                variant="outline-secondary"
+                size="sm"
+                disabled={isBusy}
+                onClick={() => setModalOpen(true)}
+              >
+                Change
+              </Button>
+              <Button
+                type="button"
+                variant="outline-secondary"
+                size="sm"
+                disabled={isBusy}
+                onClick={clearDocument}
+              >
+                Remove
+              </Button>
+            </Box>
+          </Box>
         ) : (
-          <Controller
-            name="document_ids"
-            control={control}
-            render={({ field }) => (
-              <Box className="d-flex flex-column gap-2">
-                {readyDocuments.map((doc) => {
-                  const checked = field.value.includes(doc.id)
-                  return (
-                    <div className="form-check" key={doc.id}>
-                      <input
-                        className="form-check-input"
-                        type="checkbox"
-                        id={`doc-${doc.id}`}
-                        disabled={isBusy}
-                        checked={checked}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            field.onChange([...field.value, doc.id])
-                          } else {
-                            field.onChange(
-                              field.value.filter((id) => id !== doc.id),
-                            )
-                          }
-                        }}
-                      />
-                      <label
-                        className="form-check-label"
-                        htmlFor={`doc-${doc.id}`}
-                      >
-                        {doc.title}
-                      </label>
-                    </div>
-                  )
-                })}
-              </Box>
-            )}
-          />
+          <Button
+            type="button"
+            variant="outline-secondary"
+            disabled={isBusy}
+            onClick={() => setModalOpen(true)}
+          >
+            Select document
+          </Button>
         )}
       </Box>
+
+      <DocumentSelectModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        value={selectedDocument}
+        onSelect={handleDocumentSelect}
+        grade={selectedGrade}
+        subject={selectedSubject}
+        status={DOCUMENT_STATUS.READY}
+        description="Choose a ready document to use for question generation."
+      />
 
       <FormRootError message={errors.root?.message} />
 

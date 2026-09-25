@@ -12,18 +12,26 @@ export const DOC_TYPE_LABELS = Object.fromEntries(
   DOC_TYPE_OPTIONS.map(({ value, label }) => [value, label]),
 )
 
+/** Matches backend Document.Status. */
+export const DOCUMENT_STATUS = {
+  UPLOADED: 'uploaded',
+  PROCESSING: 'processing',
+  READY: 'ready',
+  FAILED: 'failed',
+}
+
 export const DOCUMENT_STATUS_LABELS = {
-  uploaded: 'Uploaded',
-  processing: 'Processing',
-  ready: 'Ready',
-  failed: 'Failed',
+  [DOCUMENT_STATUS.UPLOADED]: 'Uploaded',
+  [DOCUMENT_STATUS.PROCESSING]: 'Processing',
+  [DOCUMENT_STATUS.READY]: 'Ready',
+  [DOCUMENT_STATUS.FAILED]: 'Failed',
 }
 
 export const DOCUMENT_STATUS_TONES = {
-  uploaded: 'secondary',
-  processing: 'warning',
-  ready: 'success',
-  failed: 'danger',
+  [DOCUMENT_STATUS.UPLOADED]: 'secondary',
+  [DOCUMENT_STATUS.PROCESSING]: 'warning',
+  [DOCUMENT_STATUS.READY]: 'success',
+  [DOCUMENT_STATUS.FAILED]: 'danger',
 }
 
 /** Backend MAX_UPLOAD_SIZE_BYTES (10 MiB). */

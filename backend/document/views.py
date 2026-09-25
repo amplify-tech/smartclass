@@ -55,11 +55,10 @@ class DocumentViewSet(
     serializer_class = DocumentSerializer
     permission_classes = [IsAuthenticated]
     http_method_names = ['get', 'post', 'delete', 'head', 'options']
-    pagination_class = None
     filterset_fields = ['grade', 'subject', 'doc_type', 'status']
     search_fields = ['title']
-    ordering_fields = ['created_at', 'title']
-    ordering = ['-created_at']
+    ordering_fields = ['created_at', 'updated_at', 'title']
+    ordering = ['-updated_at']
 
     def get_queryset(self):
         return Document.objects.filter(
