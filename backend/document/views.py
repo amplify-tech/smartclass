@@ -1,12 +1,14 @@
 from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 
+from common.constants import PROCESS_DOCUMENT
 from document.models import Document, Grade, Subject
 from document.serializers import (
     DocumentSerializer,
     GradeSerializer,
     SubjectSerializer,
 )
+from task.services import create_and_submit_job
 
 
 class GradeViewSet(
@@ -64,7 +66,12 @@ class DocumentViewSet(
         )
 
     def perform_create(self, serializer):
-        serializer.save(uploaded_by=self.request.user)
+        document = serializer.save(uploaded_by=self.request.user)
+        create_and_submit_job(
+            task_type=PROCESS_DOCUMENT,
+            payload={'document_id': document.pk},
+            request_user_id=self.request.user.id,
+        )
 
     def perform_destroy(self, instance):
         if instance.file:

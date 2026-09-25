@@ -1,20 +1,33 @@
-"""Synchronous task helpers for the document app."""
+"""Background handlers for document app jobs (kwargs = Job.payload)."""
 import logging
 
-from document.services import DocumentProcessingService
+from common.exceptions import TaskFailed
 
 logger = logging.getLogger(__name__)
 
+_GENERIC_ERROR = 'Document processing failed. Please try again.'
 
-def process_document_for_rag(document_id, **chunk_opts):
-    """Extract and chunk a stored document for RAG (embeddings come later)."""
-    logger.info('process_document_for_rag started document_id=%s', document_id)
-    chunks = DocumentProcessingService().process_document_for_rag(
-        document_id,
-        **chunk_opts,
+
+def process_document_for_rag(*, job_id, document_id, **chunk_opts):
+    """Background handler for PROCESS_DOCUMENT."""
+    from document.models import Document
+    from document.services import (
+        DocumentProcessingError,
+        DocumentProcessingService,
+        EmbeddingError,
     )
-    return {
-        'document_id': document_id,
-        'status': 'ready',
-        'chunk_count': len(chunks),
-    }
+
+    logger.info(
+        'process_document_for_rag job_id=%s document_id=%s',
+        job_id,
+        document_id,
+    )
+    try:
+        return DocumentProcessingService().process_document_for_rag(
+            document_id,
+            **chunk_opts,
+        )
+    except Document.DoesNotExist as exc:
+        raise TaskFailed(_GENERIC_ERROR) from exc
+    except (DocumentProcessingError, EmbeddingError) as exc:
+        raise TaskFailed(str(exc).strip() or _GENERIC_ERROR) from exc

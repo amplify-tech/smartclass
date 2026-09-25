@@ -1,4 +1,4 @@
-"""Document extract/chunk (Step 2) and embedding (Step 3) for the RAG pipeline.
+"""Document extract/chunk, embedding, and RAG ingestion.
 
 Retrieval and RAG generation are intentionally out of scope here.
 """
@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 
 class DocumentProcessingError(Exception):
-    """Raised when extract/chunk fails for a stored document."""
+    """Raised when document extract/chunk/ingest fails."""
 
 
 class EmbeddingError(Exception):
@@ -33,14 +33,12 @@ class EmbeddingError(Exception):
 
 @dataclass(frozen=True)
 class EmbeddingResult:
-    """Vectors plus the model id that produced them."""
-
     vectors: list
     model: str
 
 
 class DocumentProcessingService:
-    """Read a stored file, extract text via type strategies, and produce RAG chunks."""
+    """Extract, chunk, embed, and persist document chunks for RAG."""
 
     def extract_and_chunk_for_rag(
         self,
@@ -75,16 +73,19 @@ class DocumentProcessingService:
         chunk_size=RAG_CHUNK_SIZE,
         chunk_overlap=RAG_CHUNK_OVERLAP,
     ):
-        """Extract, chunk, replace stored chunks, and update document status."""
+        """Extract → chunk → embed → replace chunks. Status: processing → ready/failed."""
         try:
             document = Document.objects.get(pk=document_id)
             document.status = Document.Status.PROCESSING
             document.save(update_fields=['status', 'updated_at'])
 
-            chunks = self.extract_and_chunk_for_rag(
+            text_chunks = self.extract_and_chunk_for_rag(
                 document,
                 chunk_size=chunk_size,
                 chunk_overlap=chunk_overlap,
+            )
+            embedding = EmbeddingService().embed_texts(
+                [chunk.text for chunk in text_chunks],
             )
 
             with transaction.atomic():
@@ -96,20 +97,29 @@ class DocumentProcessingService:
                             text=chunk.text,
                             page_number=chunk.page_number,
                             chunk_index=chunk.chunk_index,
+                            embedding=vector,
+                            embedding_model=embedding.model,
                         )
-                        for chunk in chunks
+                        for chunk, vector in zip(text_chunks, embedding.vectors)
                     ],
                 )
                 document.status = Document.Status.READY
                 document.save(update_fields=['status', 'updated_at'])
 
             logger.info(
-                'Document processed for RAG document_id=%s chunks=%s',
+                'Document processed document_id=%s chunks=%s model=%s',
                 document_id,
-                len(chunks),
+                len(text_chunks),
+                embedding.model,
             )
-            return chunks
-        except DocumentProcessingError:
+            return {
+                'document_id': document_id,
+                'status': Document.Status.READY,
+                'chunk_count': len(text_chunks),
+            }
+        except Document.DoesNotExist:
+            raise
+        except (DocumentProcessingError, EmbeddingError):
             Document.objects.filter(pk=document_id).update(
                 status=Document.Status.FAILED,
             )
@@ -119,7 +129,7 @@ class DocumentProcessingService:
                 status=Document.Status.FAILED,
             )
             logger.exception(
-                'Unexpected error processing document_id=%s for RAG',
+                'Unexpected error processing document_id=%s',
                 document_id,
             )
             raise DocumentProcessingError(
@@ -145,13 +155,12 @@ class DocumentProcessingService:
 
 
 class EmbeddingService:
-    """Generate 768-dim embeddings via LLMProvider and optionally persist them."""
+    """Generate 768-dim embeddings via LLMProvider."""
 
     def __init__(self, provider=None):
         self._provider = provider or get_llm_provider()
 
     def embed_texts(self, texts, *, batch_size=RAG_EMBEDDING_BATCH_SIZE):
-        """Embed texts in batches; return vectors and the embedding model name."""
         if not texts:
             raise EmbeddingError('No texts to embed.')
         if batch_size <= 0:
@@ -174,16 +183,9 @@ class EmbeddingService:
             logger.exception('Embedding provider error model=%s', model)
             raise EmbeddingError('Embedding provider returned an invalid result.') from exc
 
-        logger.info(
-            'Embedded texts count=%s model=%s dims=%s',
-            len(vectors),
-            model,
-            EMBEDDING_DIMENSIONS,
-        )
         return EmbeddingResult(vectors=vectors, model=model)
 
     def embed_chunks(self, chunks, *, batch_size=RAG_EMBEDDING_BATCH_SIZE):
-        """Embed DocumentChunk rows and store embedding + embedding_model."""
         chunks = list(chunks)
         if not chunks:
             raise EmbeddingError('No chunks to embed.')
@@ -199,11 +201,6 @@ class EmbeddingService:
         DocumentChunk.objects.bulk_update(
             chunks,
             ['embedding', 'embedding_model', 'updated_at'],
-        )
-        logger.info(
-            'Stored chunk embeddings count=%s model=%s',
-            len(chunks),
-            result.model,
         )
         return result
 
