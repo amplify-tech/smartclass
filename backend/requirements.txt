@@ -7,5 +7,6 @@ psycopg2-binary
 pgvector
 python-dotenv
 django-storages[boto3]
+pymupdf
 requests
 gunicorn

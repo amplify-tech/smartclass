@@ -9,7 +9,7 @@ from common.constants import GENERATE_QUESTIONS, JSON
 from common.exceptions import ConflictError, TaskFailed
 from common.utils import dedupe_preserve_order
 from document.models import Document, Grade, Subject
-from common.llm import get_llm_provider
+from common.llm.factory import get_llm_provider
 from exam.models import (
     Exam,
     ExamQuestion,
