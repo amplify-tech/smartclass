@@ -1,6 +1,7 @@
-"""Document extract/chunk, embedding, RAG ingestion, and vector retrieval.
+"""Document extract/chunk, embedding, RAG ingestion, retrieval, and context.
 
-RAG generation (LLM prompting) is intentionally out of scope here.
+LLM prompting for question generation lives in the exam app; this module stays
+generic so any caller can reuse retrieval + context construction.
 """
 import logging
 from dataclasses import dataclass
@@ -14,6 +15,7 @@ from common.constants import (
     EMBEDDING_DIMENSIONS,
     RAG_CHUNK_OVERLAP,
     RAG_CHUNK_SIZE,
+    RAG_CONTEXT_LIMIT,
     RAG_EMBEDDING_BATCH_SIZE,
     RAG_SIMILARITY_THRESHOLD,
     RAG_TOP_K,
@@ -327,3 +329,35 @@ class RetrievalService:
             document_ids,
         )
         return hits
+
+
+def build_rag_context(chunks, *, context_limit=RAG_CONTEXT_LIMIT):
+    """Format retrieved chunks for an LLM prompt (dedupe, cite, truncate).
+
+    Keeps retrieval order; unique by ``chunk_id``. Generic — not exam-specific.
+    """
+    seen = set()
+    parts = []
+    used = 0
+    for chunk in chunks or []:
+        if chunk.chunk_id in seen:
+            continue
+        seen.add(chunk.chunk_id)
+
+        text = (chunk.text or '').strip()
+        if not text:
+            continue
+        remaining = context_limit - used
+        if remaining <= 0:
+            break
+        if len(text) > remaining:
+            text = text[:remaining].rstrip()
+            if not text:
+                break
+
+        title = (chunk.document_title or 'Untitled').strip()
+        page_part = f', page {chunk.page_number}' if chunk.page_number is not None else ''
+        parts.append(f'[{len(parts) + 1}] Source: {title}{page_part}\n{text}')
+        used += len(text)
+
+    return '\n\n'.join(parts)

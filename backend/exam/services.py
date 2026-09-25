@@ -9,6 +9,7 @@ from common.constants import GENERATE_QUESTIONS, JSON
 from common.exceptions import ConflictError, TaskFailed
 from common.utils import dedupe_preserve_order
 from document.models import Document, Grade, Subject
+from document.services import RetrievalError, RetrievalService, build_rag_context
 from common.llm.factory import get_llm_provider
 from exam.models import (
     Exam,
@@ -19,7 +20,7 @@ from exam.models import (
 )
 from exam.utils.labels import resolve_labels
 from exam.utils.llm_json import parse_questions
-from exam.utils.prompts import SYSTEM_PROMPT, build_user_prompt
+from exam.utils.prompts.question_prompts import RAG_SYSTEM_PROMPT, SYSTEM_PROMPT, build_user_prompt
 from task.models import Job
 from task.services import create_and_submit_job
 
@@ -223,17 +224,14 @@ class QuestionGenerationService:
             raise TaskFailed(_GENERATION_ERROR_GENERIC) from exc
 
         try:
-            prompt = build_user_prompt(
-                grade_name=grade.name,
-                subject_name=subject.name,
-                difficulty=payload.get('difficulty'),
-                total_marks=payload.get('total_marks'),
-                question_types=payload.get('question_types') or {},
-                description=payload.get('description') or '',
+            system_prompt, user_prompt = self._build_generation_prompts(
+                grade=grade,
+                subject=subject,
+                payload=payload,
             )
             raw = get_llm_provider().generate(
-                system_prompt=SYSTEM_PROMPT,
-                user_prompt=prompt,
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
                 response_format=JSON,
             )
             questions = parse_questions(raw)
@@ -251,6 +249,37 @@ class QuestionGenerationService:
         except Exception as exc:
             logger.exception('job failed id=%s', job_id)
             raise TaskFailed(self._safe_error_message(exc)) from exc
+
+    def _build_generation_prompts(self, *, grade, subject, payload):
+        """Non-RAG when no docs; otherwise retrieve → context → RAG prompts."""
+        description = payload.get('description') or ''
+        difficulty = payload.get('difficulty')
+        document_ids = list(payload.get('document_ids') or [])
+        prompt_kwargs = {
+            'grade_name': grade.name,
+            'subject_name': subject.name,
+            'difficulty': difficulty,
+            'total_marks': payload.get('total_marks'),
+            'question_types': payload.get('question_types') or {},
+            'description': description,
+        }
+
+        if not document_ids:
+            return SYSTEM_PROMPT, build_user_prompt(**prompt_kwargs)
+
+        query = description.strip() or f'{subject.name} {grade.name} {difficulty or ""}'.strip()
+        try:
+            hits = RetrievalService().retrieve_chunks(
+                query,
+                document_ids=document_ids,
+            )
+            context = build_rag_context(hits)
+        except RetrievalError as exc:
+            logger.exception('RAG retrieval failed document_ids=%s', document_ids)
+            raise TaskFailed(_GENERATION_ERROR_GENERIC) from exc
+
+        logger.info('RAG context ready docs=%s context_len=%s', len(document_ids), len(context))
+        return RAG_SYSTEM_PROMPT, build_user_prompt(**prompt_kwargs, context=context)
 
     @staticmethod
     def _safe_error_message(exc):
