@@ -1,6 +1,6 @@
-"""Document extract/chunk, embedding, and RAG ingestion.
+"""Document extract/chunk, embedding, RAG ingestion, and vector retrieval.
 
-Retrieval and RAG generation are intentionally out of scope here.
+RAG generation (LLM prompting) is intentionally out of scope here.
 """
 import logging
 from dataclasses import dataclass
@@ -8,12 +8,15 @@ from pathlib import Path
 
 import requests
 from django.db import transaction
+from pgvector.django import CosineDistance
 
 from common.constants import (
     EMBEDDING_DIMENSIONS,
     RAG_CHUNK_OVERLAP,
     RAG_CHUNK_SIZE,
     RAG_EMBEDDING_BATCH_SIZE,
+    RAG_SIMILARITY_THRESHOLD,
+    RAG_TOP_K,
 )
 from common.llm.factory import get_llm_provider
 from document.models import Document, DocumentChunk
@@ -31,10 +34,28 @@ class EmbeddingError(Exception):
     """Raised when embedding generation or persistence fails."""
 
 
+class RetrievalError(Exception):
+    """Raised when vector retrieval fails."""
+
+
 @dataclass(frozen=True)
 class EmbeddingResult:
     vectors: list
     model: str
+
+
+@dataclass(frozen=True)
+class RetrievedChunk:
+    """One chunk hit from vector similarity search."""
+
+    chunk_id: int
+    text: str
+    page_number: int | None
+    chunk_index: int
+    similarity: float
+    document_id: int
+    document_title: str
+    document_type: str
 
 
 class DocumentProcessingService:
@@ -219,3 +240,90 @@ class EmbeddingService:
                     f'Embedding at index {index} has {len(vector)} dims; '
                     f'expected {EMBEDDING_DIMENSIONS}.',
                 )
+
+
+class RetrievalService:
+    """Generic pgvector cosine retrieval over stored DocumentChunk embeddings.
+
+    Embeds the query only; never re-extracts, re-chunks, or re-embeds documents.
+    """
+
+    def __init__(self, embedding_service=None):
+        self._embedding = embedding_service or EmbeddingService()
+
+    def retrieve_chunks(
+        self,
+        query,
+        *,
+        document_ids=None,
+        top_k=RAG_TOP_K,
+        similarity_threshold=RAG_SIMILARITY_THRESHOLD,
+    ):
+        """Return top matching chunks from ready documents.
+
+        Args:
+            query: Natural-language search text (embedded once).
+            document_ids: Optional iterable of Document PKs to restrict search.
+                ``None`` searches all ready documents; an empty iterable returns [].
+            top_k: Max number of chunks to return.
+            similarity_threshold: Minimum cosine similarity in [0, 1]
+                (``similarity = 1 - cosine_distance``).
+        """
+        query = (query or '').strip()
+        if not query:
+            raise RetrievalError('query must be a non-empty string.')
+        if top_k <= 0:
+            raise RetrievalError('top_k must be a positive integer.')
+        if not 0 <= similarity_threshold <= 1:
+            raise RetrievalError('similarity_threshold must be between 0 and 1.')
+
+        if document_ids is not None:
+            document_ids = list(document_ids)
+            if not document_ids:
+                return []
+
+        try:
+            result = self._embedding.embed_texts([query])
+        except EmbeddingError as exc:
+            raise RetrievalError('Failed to embed query.') from exc
+
+        query_vector = result.vectors[0]
+        # Cosine distance ∈ [0, 2]; similarity = 1 - distance.
+        max_distance = 1.0 - similarity_threshold
+
+        qs = DocumentChunk.objects.filter(
+            document__status=Document.Status.READY,
+            embedding__isnull=False,
+        )
+        if document_ids is not None:
+            qs = qs.filter(document_id__in=document_ids)
+
+        rows = (
+            qs.select_related('document')
+            .annotate(distance=CosineDistance('embedding', query_vector))
+            .filter(distance__lte=max_distance)
+            .order_by('distance')[:top_k]
+        )
+
+        hits = [
+            RetrievedChunk(
+                chunk_id=row.pk,
+                text=row.text,
+                page_number=row.page_number,
+                chunk_index=row.chunk_index,
+                similarity=1.0 - float(row.distance),
+                document_id=row.document_id,
+                document_title=row.document.title,
+                document_type=row.document.doc_type,
+            )
+            for row in rows
+        ]
+        logger.info(
+            'Retrieved %s chunks query_len=%s top_k=%s threshold=%s document_ids=%s',
+            len(hits),
+            len(query),
+            top_k,
+            similarity_threshold,
+            document_ids,
+        )
+        return hits
