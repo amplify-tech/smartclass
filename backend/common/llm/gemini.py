@@ -3,7 +3,7 @@ import logging
 import requests
 from django.conf import settings
 
-from common.constants import JSON, TEXT
+from common.constants import JSON, LLM_TIMEOUT, TEXT
 from common.llm.base import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -37,7 +37,7 @@ class GeminiLLMProvider(LLMProvider):
             url,
             params={'key': settings.LLM_API_KEY},
             json=payload,
-            timeout=settings.LLM_TIMEOUT,
+            timeout=LLM_TIMEOUT,
         )
 
         if not resp.ok:

@@ -1,5 +1,8 @@
 from django.conf import settings
 from django.db import models
+from pgvector.django import HnswIndex, VectorField
+
+from .constants import EMBEDDING_DIMENSIONS
 
 
 class Grade(models.Model):
@@ -79,18 +82,20 @@ class Document(models.Model):
 
 
 class DocumentChunk(models.Model):
-    """Text chunk of a document, optionally with an embedding for retrieval."""
+    """Text chunk of a document with an optional pgvector embedding for RAG."""
 
     document = models.ForeignKey(
         Document,
         on_delete=models.CASCADE,
         related_name='chunks',
     )
-    content = models.TextField()
-    chunk_index = models.PositiveIntegerField()
-    embedding = models.JSONField(null=True, blank=True)
+    text = models.TextField()
     page_number = models.PositiveIntegerField(null=True, blank=True)
+    chunk_index = models.PositiveIntegerField()
+    embedding = VectorField(dimensions=EMBEDDING_DIMENSIONS, null=True, blank=True)
+    embedding_model = models.CharField(max_length=128, blank=True, default='')
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'document_chunks'
@@ -99,6 +104,15 @@ class DocumentChunk(models.Model):
             models.UniqueConstraint(
                 fields=['document', 'chunk_index'],
                 name='uniq_document_chunk_index',
+            ),
+        ]
+        indexes = [
+            HnswIndex(
+                name='doc_chunk_embedding_hnsw',
+                fields=['embedding'],
+                m=16,
+                ef_construction=64,
+                opclasses=['vector_cosine_ops'],
             ),
         ]
 

@@ -19,8 +19,8 @@ class SubjectAdmin(admin.ModelAdmin):
 class DocumentChunkInline(admin.TabularInline):
     model = DocumentChunk
     extra = 0
-    fields = ('chunk_index', 'page_number', 'content')
-    readonly_fields = ('chunk_index', 'page_number', 'content')
+    fields = ('chunk_index', 'page_number', 'text', 'embedding_model')
+    readonly_fields = ('chunk_index', 'page_number', 'text', 'embedding_model')
     can_delete = False
     show_change_link = True
 
@@ -47,6 +47,13 @@ class DocumentAdmin(admin.ModelAdmin):
 
 @admin.register(DocumentChunk)
 class DocumentChunkAdmin(admin.ModelAdmin):
-    list_display = ('document', 'chunk_index', 'page_number', 'created_at')
-    list_filter = ('document__grade', 'document__subject')
+    list_display = (
+        'document',
+        'chunk_index',
+        'page_number',
+        'embedding_model',
+        'created_at',
+        'updated_at',
+    )
+    list_filter = ('document__grade', 'document__subject', 'embedding_model')
     raw_id_fields = ('document',)

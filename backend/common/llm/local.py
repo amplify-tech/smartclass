@@ -3,7 +3,7 @@ import logging
 import requests
 from django.conf import settings
 
-from common.constants import JSON, TEXT
+from common.constants import JSON, LLM_TIMEOUT, TEXT
 from common.llm.base import LLMProvider
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class LocalLLMProvider(LLMProvider):
             payload['format'] = JSON
 
         logger.info('local llm model=%s format=%s', settings.LLM_MODEL, response_format)
-        resp = requests.post(url, json=payload, timeout=settings.LLM_TIMEOUT)
+        resp = requests.post(url, json=payload, timeout=LLM_TIMEOUT)
         resp.raise_for_status()
         content = (resp.json().get('message') or {}).get('content', '')
         if not content:

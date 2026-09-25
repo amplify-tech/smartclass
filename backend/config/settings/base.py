@@ -192,10 +192,8 @@ REST_FRAMEWORK = {
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(
-        hours=int(env('JWT_ACCESS_HOURS', '12')),
-    ),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(env('JWT_REFRESH_DAYS', '7'))),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=12),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'ROTATE_REFRESH_TOKENS': True,
     'BLACKLIST_AFTER_ROTATION': False,
     'UPDATE_LAST_LOGIN': True,
@@ -218,7 +216,6 @@ LLM_MODEL = env('LLM_MODEL', 'qwen3:1.7b')
 # Ollama (local) — default OpenAI-compatible + native chat base
 LLM_BASE_URL = env('LLM_BASE_URL', 'http://localhost:11434')
 LLM_API_KEY = env('LLM_API_KEY', '')
-LLM_TIMEOUT = int(env('LLM_TIMEOUT', '120'))
 
 LOGGING = {
     'version': 1,
