@@ -7,14 +7,11 @@ from rest_framework.response import Response
 
 from common.constants import GENERATE_QUESTIONS
 from common.exceptions import ConflictError
-from common.utils import parse_positive_int
 from exam.models import (
-    Difficulty,
     Exam,
     ExamQuestion,
     Label,
     Question,
-    QuestionType,
 )
 from exam.permissions import IsOwnerOrReadOnly
 from exam.serializers import (
@@ -79,9 +76,20 @@ class QuestionViewSet(viewsets.ModelViewSet):
     serializer_class = QuestionSerializer
     permission_classes = [IsAuthenticated, IsOwnerOrReadOnly]
     http_method_names = ['get', 'post', 'patch', 'delete', 'head', 'options']
+    filterset_fields = [
+        'question_type',
+        'difficulty',
+        'grade',
+        'subject',
+        'generation_job',
+        'labels',
+    ]
+    search_fields = ['text']
+    ordering_fields = ['created_at', 'difficulty', 'marks']
+    ordering = ['-created_at']
 
     def get_queryset(self):
-        qs = (
+        return (
             Question.objects.all()
             .select_related(
                 'grade',
@@ -91,51 +99,6 @@ class QuestionViewSet(viewsets.ModelViewSet):
             )
             .prefetch_related('options', 'labels')
         )
-
-        params = self.request.query_params
-
-        search = (params.get('search') or '').strip()
-        if search:
-            qs = qs.filter(text__icontains=search[:200])
-
-        question_type = (params.get('question_type') or '').strip().lower()
-        if question_type:
-            valid_types = {choice.value for choice in QuestionType}
-            if question_type in valid_types:
-                qs = qs.filter(question_type=question_type)
-
-        difficulty = (params.get('difficulty') or '').strip().lower()
-        if difficulty:
-            valid_difficulties = {choice.value for choice in Difficulty}
-            if difficulty in valid_difficulties:
-                qs = qs.filter(difficulty=difficulty)
-
-        grade_id = parse_positive_int(params.get('grade'))
-        if grade_id is not None:
-            qs = qs.filter(grade_id=grade_id)
-
-        subject_id = parse_positive_int(params.get('subject'))
-        if subject_id is not None:
-            qs = qs.filter(subject_id=subject_id)
-
-        generation_job = params.get('generation_job') or params.get('job_id')
-        job_id = parse_positive_int(generation_job)
-        if job_id is not None:
-            # Only the job owner can filter questions by that job.
-            qs = qs.filter(
-                generation_job_id=job_id,
-                generation_job__created_by=self.request.user,
-            )
-
-        label_ids = [
-            lid
-            for lid in (parse_positive_int(v) for v in params.getlist('label'))
-            if lid is not None
-        ]
-        if label_ids:
-            qs = qs.filter(labels__in=label_ids).distinct()
-
-        return qs
 
     def perform_create(self, serializer):
         serializer.save(created_by=self.request.user)

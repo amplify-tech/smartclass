@@ -2,6 +2,7 @@ Django>=5.2,<5.3
 djangorestframework
 djangorestframework-simplejwt
 django-cors-headers
+django-filter
 drf-spectacular
 psycopg2-binary
 pgvector
