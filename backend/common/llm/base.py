@@ -16,3 +16,12 @@ class LLMProvider(ABC):
         response_format: ResponseFormat = TEXT,
     ) -> str:
         pass
+
+    @property
+    @abstractmethod
+    def embedding_model(self) -> str:
+        """Configured embedding model id for this provider."""
+
+    @abstractmethod
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        """Return one embedding vector per text, in the same order."""

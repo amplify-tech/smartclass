@@ -208,7 +208,7 @@ SPECTACULAR_SETTINGS = {
 }
 
 # ---------------------------------------------------------------------------
-# LLM (question generation)
+# LLM (question generation + embeddings)
 # ---------------------------------------------------------------------------
 # LLM_PROVIDER: local | gemini
 LLM_PROVIDER = env('LLM_PROVIDER', 'local')
@@ -216,6 +216,8 @@ LLM_MODEL = env('LLM_MODEL', 'qwen3:1.7b')
 # Ollama (local) — default OpenAI-compatible + native chat base
 LLM_BASE_URL = env('LLM_BASE_URL', 'http://localhost:11434')
 LLM_API_KEY = env('LLM_API_KEY', '')
+# Optional override; otherwise provider default (nomic-embed-text / text-embedding-004).
+EMBEDDING_MODEL = env('EMBEDDING_MODEL', '')
 
 LOGGING = {
     'version': 1,

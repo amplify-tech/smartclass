@@ -9,8 +9,11 @@ JSON = 'json'
 LLM_TIMEOUT = 120
 
 # RAG — chunking + retrieval (embeddings are 768-dim; see DocumentChunk)
-# Default matches a common 768-dim local model (e.g. Ollama nomic-embed-text).
+EMBEDDING_DIMENSIONS = 768
+# Local (Ollama) default; Gemini uses settings.EMBEDDING_MODEL or text-embedding-004.
 RAG_EMBEDDING_MODEL = 'nomic-embed-text'
+# Max texts per provider.embed() call (Gemini batchEmbedContents limit is 100).
+RAG_EMBEDDING_BATCH_SIZE = 100
 RAG_CHUNK_SIZE = 500
 RAG_CHUNK_OVERLAP = 50
 RAG_TOP_K = 5
