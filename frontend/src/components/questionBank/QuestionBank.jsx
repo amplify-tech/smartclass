@@ -170,7 +170,7 @@ export default function QuestionBank() {
         search,
         grade: gradeFilter,
         subject: subjectFilter,
-        label: labelFilter,
+        labels: labelFilter,
         question_type: typeFilter,
         difficulty: difficultyFilter,
         generation_job: jobId || undefined,
