@@ -1,7 +1,7 @@
 from django.conf import settings
 
-from exam.llm.gemini import GeminiLLMProvider
-from exam.llm.local import LocalLLMProvider
+from common.llm.gemini import GeminiLLMProvider
+from common.llm.local import LocalLLMProvider
 
 
 def get_llm_provider():

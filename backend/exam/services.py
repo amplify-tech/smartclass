@@ -5,11 +5,11 @@ from django.db import transaction
 from django.db.models import Max
 from rest_framework.exceptions import ValidationError
 
-from common.constants import GENERATE_QUESTIONS
+from common.constants import GENERATE_QUESTIONS, JSON
 from common.exceptions import ConflictError, TaskFailed
 from common.utils import dedupe_preserve_order
 from document.models import Document, Grade, Subject
-from exam.llm import get_llm_provider
+from common.llm import get_llm_provider
 from exam.models import (
     Exam,
     ExamQuestion,
@@ -231,7 +231,11 @@ class QuestionGenerationService:
                 question_types=payload.get('question_types') or {},
                 description=payload.get('description') or '',
             )
-            raw = get_llm_provider().generate(SYSTEM_PROMPT, prompt)
+            raw = get_llm_provider().generate(
+                system_prompt=SYSTEM_PROMPT,
+                user_prompt=prompt,
+                response_format=JSON,
+            )
             questions = parse_questions(raw)
             question_ids = self._save_questions(
                 job=job,

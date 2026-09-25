@@ -3,7 +3,8 @@ import logging
 import requests
 from django.conf import settings
 
-from exam.llm.base import LLMProvider
+from common.constants import JSON, TEXT
+from common.llm.base import LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -11,7 +12,13 @@ logger = logging.getLogger(__name__)
 class LocalLLMProvider(LLMProvider):
     """Ollama /api/chat."""
 
-    def generate(self, system_prompt: str, user_prompt: str) -> str:
+    def generate(
+        self,
+        *,
+        system_prompt,
+        user_prompt,
+        response_format=TEXT,
+    ):
         url = f'{settings.LLM_BASE_URL.rstrip("/")}/api/chat'
         payload = {
             'model': settings.LLM_MODEL,
@@ -20,10 +27,12 @@ class LocalLLMProvider(LLMProvider):
                 {'role': 'user', 'content': user_prompt},
             ],
             'stream': False,
-            'format': 'json',
             'think': False,
         }
-        logger.info('local llm model=%s', settings.LLM_MODEL)
+        if response_format == JSON:
+            payload['format'] = JSON
+
+        logger.info('local llm model=%s format=%s', settings.LLM_MODEL, response_format)
         resp = requests.post(url, json=payload, timeout=settings.LLM_TIMEOUT)
         resp.raise_for_status()
         content = (resp.json().get('message') or {}).get('content', '')
