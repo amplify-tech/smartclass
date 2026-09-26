@@ -20,7 +20,7 @@ from exam.models import (
 )
 from exam.utils.labels import resolve_labels
 from exam.utils.llm_json import parse_questions
-from exam.utils.prompts.question_prompts import RAG_SYSTEM_PROMPT, SYSTEM_PROMPT, build_user_prompt
+from exam.utils.prompts.generate_question_prompts import RAG_SYSTEM_PROMPT, SYSTEM_PROMPT, build_user_prompt
 from task.models import Job
 from task.services import create_and_submit_job
 
