@@ -1,5 +1,7 @@
 import { Link, useLocation, useParams } from 'react-router-dom'
+import { useState } from 'react'
 
+import { retryQuestionGenerationJob } from '../api/questionGeneration'
 import {
   Alert,
   Box,
@@ -11,6 +13,7 @@ import {
 } from '../components/common_ui'
 import { useCatalog } from '../contexts/CatalogContext'
 import useQuestionGenerationJob from '../hooks/useQuestionGenerationJob'
+import { getApiErrorMessage } from '../utils/apiErrors'
 
 function totalRequestedQuestions(questionTypes) {
   if (!questionTypes || typeof questionTypes !== 'object') return null
@@ -27,6 +30,9 @@ export default function GenerationTaskPage() {
   const { grades, subjects } = useCatalog()
   const { job, status, error, isPolling, questionCount } =
     useQuestionGenerationJob(taskId, location.state?.job)
+
+  const [disabled, setDisabled] = useState(false)
+  const [actionError, setActionError] = useState(null)
 
   const gradeName =
     grades.find((g) => Number(g.id) === Number(job?.grade))?.name ||
@@ -49,6 +55,20 @@ export default function GenerationTaskPage() {
     { label: 'Pending Tasks', to: '/exams/pending-tasks' },
     { label: taskId ? `Job #${taskId}` : 'Generation task' },
   ]
+
+  const handleTryAgain = async () => {
+    setDisabled(true)
+    setActionError(null)
+    try {
+      await retryQuestionGenerationJob(taskId)
+      window.location.reload()
+    } catch (err) {
+      setActionError(
+        getApiErrorMessage(err, 'Could not retry generation. Please try again.'),
+      )
+      setDisabled(false)
+    }
+  }
 
   if (!taskId) {
     return (
@@ -74,13 +94,13 @@ export default function GenerationTaskPage() {
         />
         <Card>
           <CardBody className="sc-card-body">
-            {error ? (
+            {actionError || error ? (
               <Alert variant="danger" className="mb-4">
-                {error}
+                {actionError || error}
               </Alert>
             ) : null}
             <Box className="d-flex flex-wrap gap-2">
-              <Button as={Link} to="/exams/generate">
+              <Button type="button" onClick={handleTryAgain} disabled={disabled}>
                 Try again
               </Button>
               <Button

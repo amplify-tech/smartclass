@@ -39,7 +39,7 @@ def run_job(job_id, request_user_id=None):
         logger.info('job_id=%s already %s', job_id, job.status)
         return
 
-    if job.retry_count >= MAX_RETRIES:
+    if job.retry_count > MAX_RETRIES:
         logger.error('job_id=%s reached max retries', job_id)
         return
 
