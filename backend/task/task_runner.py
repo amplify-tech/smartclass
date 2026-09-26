@@ -5,7 +5,7 @@ import logging
 from django.db import close_old_connections
 from django.utils import timezone
 
-from common.constants import GENERATE_QUESTIONS, MAX_RETRIES, PROCESS_DOCUMENT
+from common.constants import GENERATE_QUESTIONS, MAX_RETRIES, PROCESS_DOCUMENT_FOR_RAG
 from common.exceptions import TaskFailed
 from document.tasks import process_document_for_rag
 from exam.tasks import generate_questions
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 TASK_HANDLER_MAPPING = {
     GENERATE_QUESTIONS: generate_questions,
-    PROCESS_DOCUMENT: process_document_for_rag,
+    PROCESS_DOCUMENT_FOR_RAG: process_document_for_rag,
 }
 
 _GENERIC_TASK_ERROR = 'Task failed. Please try again.'

@@ -1,7 +1,7 @@
 from rest_framework import mixins, viewsets
 from rest_framework.permissions import IsAdminUser, IsAuthenticated
 
-from common.constants import PROCESS_DOCUMENT
+from common.constants import PROCESS_DOCUMENT_FOR_RAG
 from document.models import Document, Grade, Subject
 from document.serializers import (
     DocumentSerializer,
@@ -71,7 +71,7 @@ class DocumentViewSet(
     def perform_create(self, serializer):
         document = serializer.save(uploaded_by=self.request.user)
         create_and_submit_job(
-            task_type=PROCESS_DOCUMENT,
+            task_type=PROCESS_DOCUMENT_FOR_RAG,
             payload={'document_id': document.pk},
             request_user_id=self.request.user.id,
         )

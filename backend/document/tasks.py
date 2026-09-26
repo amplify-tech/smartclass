@@ -9,7 +9,7 @@ _GENERIC_ERROR = 'Document processing failed. Please try again.'
 
 
 def process_document_for_rag(*, job_id, document_id, **chunk_opts):
-    """Background handler for PROCESS_DOCUMENT."""
+    """Background handler for PROCESS_DOCUMENT_FOR_RAG."""
     from document.models import Document
     from document.services import (
         DocumentProcessingError,

@@ -8,7 +8,7 @@ from common.llm.base import LLMProvider
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_EMBEDDING_MODEL = 'text-embedding-004'
+_DEFAULT_EMBEDDING_MODEL = 'gemini-embedding-2'
 
 
 class GeminiLLMProvider(LLMProvider):
