@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 
-import { getQuestionGenerationJob } from '../api/questionGeneration'
+import {
+  getJobStatus,
+  getQuestionGenerationJob,
+} from '../api/questionGeneration'
 import { getApiErrorMessage } from '../utils/apiErrors'
 
 const JOB_POLL_INTERVAL_MS = 2000
-
 const ACTIVE_STATUSES = new Set(['pending', 'running', 'loading'])
 
 function isMatchingJob(jobId, job) {
@@ -43,35 +45,50 @@ export default function useQuestionGenerationJob(jobId, initialJob = null) {
       setError(null)
     }
 
+    async function loadDetails() {
+      const { data } = await getQuestionGenerationJob(jobId)
+      if (cancelled) return null
+      setJob(data)
+      setStatus(data.status)
+      setError(
+        data.status === 'failed'
+          ? data.error_message || 'Question generation failed'
+          : null,
+      )
+      return data.status
+    }
+
     async function poll() {
       try {
-        const { data } = await getQuestionGenerationJob(jobId)
+        const { data } = await getJobStatus(jobId)
         if (cancelled) return
 
-        setJob(data)
-        setStatus(data.status)
-        setError(
-          data.status === 'failed'
-            ? data.error_message || 'Question generation failed'
-            : null,
-        )
-
-        if (data.status === 'completed' || data.status === 'failed') {
+        if (data.status === 'pending' || data.status === 'running') {
+          timerId = setTimeout(poll, JOB_POLL_INTERVAL_MS)
           return
         }
 
-        timerId = setTimeout(poll, JOB_POLL_INTERVAL_MS)
+        await loadDetails()
       } catch (err) {
         if (cancelled) return
         setStatus('error')
         setJob(null)
-        setError(
-          getApiErrorMessage(err, 'Failed to check generation status'),
-        )
+        setError(getApiErrorMessage(err, 'Failed to check generation status'))
       }
     }
 
-    poll()
+    ;(async () => {
+      try {
+        const appStatus = await loadDetails()
+        if (cancelled) return
+        if (appStatus === 'pending' || appStatus === 'running') poll()
+      } catch (err) {
+        if (cancelled) return
+        setStatus('error')
+        setJob(null)
+        setError(getApiErrorMessage(err, 'Failed to check generation status'))
+      }
+    })()
 
     return () => {
       cancelled = true
@@ -80,13 +97,11 @@ export default function useQuestionGenerationJob(jobId, initialJob = null) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- poll only when jobId changes
   }, [jobId])
 
-  const isPolling = ACTIVE_STATUSES.has(status)
-
   return {
     job,
     status,
     error,
-    isPolling,
+    isPolling: ACTIVE_STATUSES.has(status),
     questionCount: Array.isArray(job?.question_ids) ? job.question_ids.length : 0,
   }
 }

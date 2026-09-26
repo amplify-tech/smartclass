@@ -12,6 +12,11 @@ export function getQuestionGenerationJob(jobId) {
   return client.get(`/question-generation-jobs/${jobId}/`)
 }
 
+/** Generic task.Job status — use this for polling. */
+export function getJobStatus(jobId) {
+  return client.get(`/tasks/jobs/${jobId}/`)
+}
+
 export function retryQuestionGenerationJob(jobId) {
   return client.post(`/tasks/jobs/${jobId}/retry/`)
 }
