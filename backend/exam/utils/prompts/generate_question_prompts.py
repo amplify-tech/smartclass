@@ -24,6 +24,9 @@ Output schema:
 _SHARED_RULES = """
 Rules:
 - Match the requested grade, subject, difficulty, and teacher instructions.
+- Every question must be self-sufficient: a student must be able to understand and answer it without seeing any source PDF, passage, or excerpt.
+- Include the names, concepts, objects, and context the question depends on in the question itself.
+- Do not use vague references such as "the above passage", "the passage", "the author", "this process", "the diagram", "according to the text", or "as mentioned" unless that person, work, process, or object is explicitly named in the question.
 - MCQ: exactly 4 options with exactly 1 correct answer (set is_correct true on that option only).
 - Short: no options; put the answer in correct_answer.
 - Long: no options; leave correct_answer empty.
@@ -62,8 +65,8 @@ Internally follow these steps:
 5. Assign up to 3 short topic as labels for each question.
 
 {_SHARED_RULES}
-- Prefer questions that can be answered from the provided sources; do not invent facts not present in the sources.
-- Source/page markers are for your grounding only; do not mention them in question text.
+- Use the provided excerpts only as factual source context. Do not invent names, numbers, or other facts that are missing from the excerpts.
+- Source and page markers are for your grounding only. Do not mention them, the excerpts, or "the text" in the question.
 
 {_OUTPUT_SCHEMA}
 """
@@ -95,6 +98,6 @@ def build_user_prompt(
     context_block = context.strip() or '(no relevant excerpts retrieved)'
     return (
         f'{prompt}\n\n'
-        f'Source excerpts (use these as grounding):\n'
+        f'Source excerpts (factual context only; write self-sufficient questions that do not refer to these excerpts):\n'
         f'{context_block}'
     )
