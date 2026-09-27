@@ -17,8 +17,8 @@ from common.constants import (
     RAG_CHUNK_SIZE,
     RAG_CONTEXT_LIMIT,
     RAG_EMBEDDING_BATCH_SIZE,
-    RAG_SIMILARITY_THRESHOLD,
-    RAG_TOP_K,
+    DEFAULT_RAG_SIMILARITY_THRESHOLD,
+    DEFAULT_RAG_TOP_K,
 )
 from common.llm.factory import get_llm_provider
 from document.models import Document, DocumentChunk
@@ -258,8 +258,8 @@ class RetrievalService:
         query,
         *,
         document_ids=None,
-        top_k=RAG_TOP_K,
-        similarity_threshold=RAG_SIMILARITY_THRESHOLD,
+        top_k=DEFAULT_RAG_TOP_K,
+        similarity_threshold=DEFAULT_RAG_SIMILARITY_THRESHOLD,
     ):
         """Return top matching chunks from ready documents.
 

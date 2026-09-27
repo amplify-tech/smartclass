@@ -17,7 +17,11 @@ RAG_EMBEDDING_MODEL = 'nomic-embed-text'
 RAG_EMBEDDING_BATCH_SIZE = 100
 RAG_CHUNK_SIZE = 500
 RAG_CHUNK_OVERLAP = 50
-RAG_TOP_K = 5
-RAG_SIMILARITY_THRESHOLD = 0.7
+# Generic retrieval defaults (document.services.RetrievalService).
+DEFAULT_RAG_TOP_K = 5
+DEFAULT_RAG_SIMILARITY_THRESHOLD = 0.7
+# Question generation retrieval (exam.services).
+EXAM_RAG_TOP_K = 10
+EXAM_RAG_SIMILARITY_THRESHOLD = 0
 # Max characters of retrieved chunk text injected into an LLM prompt.
 RAG_CONTEXT_LIMIT = 4000

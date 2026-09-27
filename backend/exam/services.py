@@ -1,11 +1,17 @@
 """Orchestration for AI question generation and exam assembly."""
 import logging
+import random
 
 from django.db import transaction
 from django.db.models import Max
 from rest_framework.exceptions import ValidationError
 
-from common.constants import GENERATE_QUESTIONS, JSON
+from common.constants import (
+    GENERATE_QUESTIONS,
+    JSON,
+    EXAM_RAG_SIMILARITY_THRESHOLD,
+    EXAM_RAG_TOP_K,
+)
 from common.exceptions import ConflictError, TaskFailed
 from common.utils import dedupe_preserve_order
 from document.models import Document, Grade, Subject
@@ -272,7 +278,12 @@ class QuestionGenerationService:
             hits = RetrievalService().retrieve_chunks(
                 query,
                 document_ids=document_ids,
+                top_k=EXAM_RAG_TOP_K,
+                similarity_threshold=EXAM_RAG_SIMILARITY_THRESHOLD,
             )
+            # Same query returns the same top-k set; shuffle so each paper
+            # draws a different slice once build_rag_context applies the limit.
+            random.shuffle(hits)
             context = build_rag_context(hits)
         except RetrievalError as exc:
             logger.exception('RAG retrieval failed document_ids=%s', document_ids)
