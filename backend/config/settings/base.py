@@ -54,6 +54,7 @@ INSTALLED_APPS = [
     'document',
     'exam',
     'task',
+    'google_integration',
 ]
 
 MIDDLEWARE = [

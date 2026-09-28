@@ -19,6 +19,7 @@ api_v1_patterns = [
     path('', include('document.urls')),
     path('', include('exam.urls')),
     path('', include('task.urls')),
+    path('', include('google_integration.urls')),
 ]
 
 urlpatterns = [

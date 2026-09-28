@@ -10,4 +10,6 @@ python-dotenv
 django-storages[boto3]
 pymupdf
 requests
+google-auth
+google-api-python-client
 gunicorn

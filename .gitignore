@@ -142,6 +142,7 @@ activemq-data/
 .env
 .env.*
 .envrc
+token.json
 .venv
 env/
 venv/
