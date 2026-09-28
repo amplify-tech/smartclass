@@ -7,10 +7,15 @@ Run from the ``backend`` directory:
 """
 
 import argparse
+from pathlib import Path
 
+from dotenv import load_dotenv
 from mcp.server import MCPServer
 
 from slides_mcp import tools
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
 
 mcp = MCPServer(
     'SmartClass Google Slides',
@@ -18,6 +23,7 @@ mcp = MCPServer(
 )
 
 mcp.add_tool(tools.ping)
+mcp.add_tool(tools.create_presentation)
 
 
 def main():
