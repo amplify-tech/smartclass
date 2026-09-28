@@ -42,7 +42,7 @@ def parse_plan(raw, instruction, slide_count=None):
     ``slide_count`` is the selected presentation's slide count, or ``None``
     when no presentation is selected (only CREATE is allowed then).
     """
-    data = _load_json(raw)
+    data = load_json(raw)
     intent = str(data.get('intent') or '').strip().lower()
     if slide_count is None or intent == CREATE:
         return _create_plan(data, instruction)
@@ -165,7 +165,7 @@ def _text(value, limit):
     return text[:limit] if text else None
 
 
-def _load_json(raw):
+def load_json(raw):
     text = (raw or '').strip()
     try:
         data = json.loads(text)

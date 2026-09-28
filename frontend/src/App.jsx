@@ -16,6 +16,7 @@ import GenerationTaskPage from './pages/GenerationTaskPage'
 import HomePage from './pages/HomePage'
 import PendingTasksPage from './pages/PendingTasksPage'
 import PptsPage from './pages/PptsPage'
+import PresentationChatPage from './pages/PresentationChatPage'
 import QuestionBankPage from './pages/QuestionBankPage'
 import { isAuthenticated } from './utils/authTokens'
 
@@ -72,6 +73,8 @@ function App() {
             <Route path="/documents" element={<DocumentsPage />} />
             <Route path="/documents/upload" element={<DocumentUploadPage />} />
             <Route path="/ppts" element={<PptsPage />} />
+            <Route path="/ppts/chat/new" element={<PresentationChatPage />} />
+            <Route path="/ppts/chat/:chatId" element={<PresentationChatPage />} />
           </Route>
         </Route>
 

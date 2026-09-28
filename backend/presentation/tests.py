@@ -1,7 +1,11 @@
 import json
+from unittest.mock import patch
 
-from django.test import SimpleTestCase
+from django.contrib.auth import get_user_model
+from django.test import SimpleTestCase, TestCase
 
+from presentation.chat import ChatService
+from presentation.models import Conversation, Message, Presentation
 from presentation.plan import PlanError, parse_plan
 
 IMAGE = 'https://example.com/lens.png'
@@ -91,3 +95,38 @@ class UpdatePlanTests(SimpleTestCase):
     def test_parses_json_wrapped_in_text(self):
         raw = 'Sure: {"intent": "update", "actions": [{"operation": "delete_slide", "slide_number": 1}]}'
         self.assertEqual(parse_plan(raw, '', 2)['actions'][0]['operation'], 'delete_slide')
+
+
+class ChatServiceTests(TestCase):
+    def setUp(self):
+        user = get_user_model().objects.create_user(email='t@example.com', password='x')
+        self.conversation = Conversation.objects.create(created_by=user)
+        for index, title in enumerate(('Optics', 'Photosynthesis')):
+            Presentation.objects.create(
+                created_by=user,
+                conversation=self.conversation,
+                google_presentation_id=f'g{index}',
+                title=title,
+                url=f'https://docs.google.com/presentation/d/g{index}/edit',
+            )
+
+    def send(self, llm_output, content='Add a slide about reflection'):
+        with patch('presentation.chat.get_llm_provider') as provider:
+            provider.return_value.generate.return_value = json.dumps(llm_output)
+            return ChatService().send(self.conversation, content)
+
+    def test_reply_is_saved_with_user_message(self):
+        reply = self.send({'action': 'reply', 'reply': 'Hello!'}, 'Hi')
+        self.assertEqual(reply.content, 'Hello!')
+        self.assertEqual(
+            list(self.conversation.messages.values_list('role', flat=True)),
+            [Message.USER, Message.ASSISTANT],
+        )
+        self.assertEqual(Conversation.objects.get().title, 'Hi')
+
+    def test_asks_which_presentation_when_target_unknown(self):
+        with patch('presentation.chat.PresentationService') as service:
+            reply = self.send({'action': 'update', 'presentation_id': None})
+        service.return_value.run_prompt.assert_not_called()
+        self.assertIn('Which presentation', reply.content)
+        self.assertIn('Photosynthesis', reply.content)

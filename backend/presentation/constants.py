@@ -8,5 +8,9 @@ MAX_TEXT_LENGTH = 3000
 MAX_SLIDE_CONTEXT_CHARS = 300
 MAX_CONTEXT_CHARS = 6000
 
+# Recent chat messages sent to the LLM when routing a new message.
+CHAT_HISTORY_MESSAGES = 12
+MAX_HISTORY_MESSAGE_CHARS = 500
+
 # Layout for generated content slides; its title/body placeholders take update_slide text.
 CONTENT_SLIDE_LAYOUT = 'TITLE_AND_BODY'
