@@ -243,6 +243,11 @@ LLM_API_KEY = env('LLM_API_KEY', '')
 # Optional override; otherwise provider default (nomic-embed-text / text-embedding-004).
 EMBEDDING_MODEL = env('EMBEDDING_MODEL', '')
 
+# Empty launches `python -m slides_mcp.server` over stdio; otherwise a
+# streamable-http URL such as http://127.0.0.1:8001/mcp.
+SLIDES_MCP_URL = env('SLIDES_MCP_URL', '')
+SLIDES_MCP_TIMEOUT_SECONDS = float(env('SLIDES_MCP_TIMEOUT_SECONDS', '60'))
+
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
