@@ -25,6 +25,7 @@ mcp = MCPServer(
 mcp.add_tool(tools.ping)
 mcp.add_tool(tools.create_presentation)
 mcp.add_tool(tools.get_presentation)
+mcp.add_tool(tools.delete_presentation)
 mcp.add_tool(tools.add_slide)
 mcp.add_tool(tools.update_slide)
 mcp.add_tool(tools.delete_slide)

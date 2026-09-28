@@ -52,6 +52,11 @@ class DeletedSlide(TypedDict):
     slide_id: str
 
 
+class DeletedPresentation(TypedDict):
+    presentation_id: str
+    deleted: bool
+
+
 class AddedText(TypedDict):
     presentation_id: str
     slide_id: str
@@ -104,6 +109,18 @@ def get_presentation(presentation_id: str) -> PresentationInfo:
             )
             for slide in result['slides']
         ],
+    )
+
+
+def delete_presentation(presentation_id: str) -> DeletedPresentation:
+    """Permanently delete a presentation. Deleting one that is already gone succeeds."""
+    presentation_id = _required_text(presentation_id, 'presentation_id')
+    result = _call(
+        lambda: google_slides_service.delete_presentation(presentation_id)
+    )
+    return DeletedPresentation(
+        presentation_id=result['presentation_id'],
+        deleted=result['deleted'],
     )
 
 

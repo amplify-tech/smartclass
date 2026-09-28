@@ -102,6 +102,23 @@ class GoogleSlidesService:
             exc.presentation_id = presentation_id
             raise
 
+    def delete_presentation(self, presentation_id):
+        """Delete the presentation file. A file that is already gone counts as deleted."""
+        presentation_id = _required(
+            presentation_id, 'A presentation ID is required.'
+        )
+        drive = self._auth.get_api_client('drive', 'v3')
+        try:
+            _execute(
+                drive.files().delete(fileId=presentation_id),
+                'delete presentation',
+            )
+        except GoogleSlidesError as exc:
+            cause = exc.__cause__
+            if not (isinstance(cause, HttpError) and cause.status_code == 404):
+                raise
+        return {'presentation_id': presentation_id, 'deleted': True}
+
     def get_presentation(self, presentation_id):
         """Return the presentation title, URL, and a summary of each slide."""
         presentation_id = _required(
