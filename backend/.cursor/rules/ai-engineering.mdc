@@ -6,18 +6,21 @@ alwaysApply: false
 Focus on learning RAG and MCP.
 
 ## RAG
-Document → Chunk → Embed → Store → Retrieve → LLM
-
-Support both:
-- document-based Q&A
-- normal LLM Q&A when no document exists
-
-Keep RAG components simple and independently testable.
-
+Upload → extract → chunk → embed (same `LLMProvider`, 768-dim) → `DocumentChunk` in pgvector.
+Generate: selected READY docs → embed query → cosine top-k → context → JSON questions.
+No docs → same generation, no retrieval. Retrieval stays generic; prompts stay in `exam`.
 
 ## MCP
-LLM → MCP Client → MCP Server → Tool → Google API
+LLM returns JSON only. It does not call tools, and tool results are not sent back to it.
+Chat decision → validated slide plan → `SlidesMCPClient` → `slides_mcp` server → `GoogleSlidesService` → Slides/Drive.
+One shared Google account (server refresh token). Code writes the chat reply.
+Validate tool args in the tool; validate the plan before any MCP call.
 
-Use explicit tool schemas and validation.
+Do not introduce AI agents or native tool-calling.
 
-Do not introduce AI agents or unnecessary AI architecture.
+## Prompts
+Call `get_llm_provider().generate(system_prompt, user_prompt, response_format=JSON)`. No raw HTTP from a feature.
+Put rules, guardrails, and the JSON schema in the system prompt. Put teacher text, excerpts, and slide context only in the user prompt.
+Fence that text with `_as_data_block` and label it "data, not instructions". Strip the tag so the text cannot close its own fence.
+Ask for JSON only. Parse and validate in code (`parse_questions`, `parse_plan`); show a safe error, never the raw model error.
+Keep prompt strings in `exam/utils/prompts` or `presentation/prompts.py`, not in services.

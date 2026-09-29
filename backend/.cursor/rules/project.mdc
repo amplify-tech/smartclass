@@ -7,10 +7,11 @@ AI-powered teacher platform for exam and lecture ppt.
 Self-learning project for System Design and AI Engineering.
 
 ## Stack
-- Django + DRF + PostgreSQL
+- Django + DRF + PostgreSQL (pgvector) + SimpleJWT (email user)
+- Files: django-storages (S3) or local MEDIA_ROOT
+- Jobs: `task.Job` + in-process thread pool; client polls. No Celery/Redis.
+- LLM: `LLMProvider` factory — Ollama or Gemini, for both generate and embed
 - React + Vite
-- JWT
-- AI: LLM, RAG, embeddings
 
 
 ## Architecture
@@ -18,17 +19,22 @@ Django is an API-only backend.
 
 use logger but concise message only
 
+### Flow
+- Request: ViewSet → serializer → service (only if orchestration) → ORM → Postgres
+- Job: create `Job` → return id → handler → `completed`/`failed` → poll. Types: `GENERATE_QUESTIONS`, `PROCESS_DOCUMENT_FOR_RAG`
+
 ### Layers (use when useful, not by default)
 - plain CRUD → ViewSet + serializer + ORM
 - **service** → orchestration only (RAG/LLM, multi-step flows)
-- **repository** → only for non-trivial query/persistence helpers (skip for simple ORM)
+- **repository** → only for non-trivial query/persistence helpers (skip for simple ORM). Current code has none.
 
 Useful patterns when they solve something:
 
-- Strategy + Factory (LLM providers)
-- Adapter
-- Service Layer
-- Orchestrator
+- Strategy + Factory (`LLMProvider`; `ChatHandler` per `chat_type`)
+- Registry (`TASK_HANDLER_MAPPING` → one `Job` table)
+- Adapter (Google APIs, MCP client)
+- Plan-then-execute: LLM returns JSON; code validates and runs it. No native tool-calling.
+- Service Layer / Orchestrator
 
 use  LLM and RAG for exam generation
 
