@@ -17,6 +17,7 @@ import {
 import { getApiErrorMessage } from '../utils/apiErrors'
 import { formatDateTime } from '../utils/formatDate'
 import { parsePaginatedResponse } from '../utils/pagination'
+import { presentationChat, presentationChatContext } from './presentationChat'
 
 export default function PptsPage() {
   const navigate = useNavigate()
@@ -72,18 +73,11 @@ export default function PptsPage() {
     setCreatingChat(key)
     setChatError(null)
     try {
-      const context = presentation
-        ? {
-            presentations: [{
-              id: presentation.id,
-              title: presentation.title,
-              url: presentation.url,
-            }],
-            active_presentation_id: presentation.id,
-          }
-        : {}
-      const { data } = await createChat('presentation', context)
-      navigate(`/ppts/chat/${data.id}`)
+      const { data } = await createChat(
+        presentationChat.chatType,
+        presentationChatContext(presentation),
+      )
+      navigate(presentationChat.chatPath(data.id))
     } catch (err) {
       setChatError(getApiErrorMessage(err, 'Failed to create chat'))
     } finally {
