@@ -10,7 +10,7 @@ from chat.serializers import (
     ConversationSerializer,
     MessageCreateSerializer,
 )
-from chat.services import ChatService
+from chat.services import ChatService, handler_for
 
 
 class ConversationViewSet(
@@ -20,7 +20,7 @@ class ConversationViewSet(
     mixins.DestroyModelMixin,
     viewsets.GenericViewSet,
 ):
-    """User's AI chats. Every message goes through ``POST {id}/messages/``."""
+    """Shared chat API. ``chat_type`` and ``context`` pick the behavior."""
 
     permission_classes = [IsAuthenticated]
     filterset_fields = ['chat_type']
@@ -43,10 +43,12 @@ class ConversationViewSet(
 
     @action(detail=True, methods=['post'])
     def messages(self, request, pk=None):
-        """Send a user message; returns the whole updated conversation."""
+        """Send a user message; returns the updated conversation."""
         conversation = self.get_object()
         serializer = MessageCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        ChatService().send(conversation, serializer.validated_data['content'])
-        conversation = self.get_queryset().prefetch_related('messages').get(pk=conversation.pk)
+        ChatService(handler_for(conversation.chat_type)).send(
+            conversation, serializer.validated_data['content'],
+        )
+        conversation = self.get_queryset().get(pk=conversation.pk)
         return Response(ConversationDetailSerializer(conversation).data)

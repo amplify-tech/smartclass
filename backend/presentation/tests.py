@@ -88,6 +88,57 @@ class UpdatePlanTests(SimpleTestCase):
         )
         self.assertEqual(result['intent'], 'create')
 
+    def test_missing_intent_with_actions_is_an_update(self):
+        result = plan(
+            {'actions': [{'operation': 'add_slide', 'title': 'DSA', 'body': 'Arrays and trees'}]},
+            slide_count=4,
+        )
+        self.assertEqual(result['intent'], 'update')
+        self.assertEqual(result['actions'][0]['operation'], 'add_slide')
+        self.assertEqual(result['actions'][0]['title'], 'DSA')
+
+    def test_bare_add_slide_is_an_update(self):
+        result = plan(
+            {'operation': 'add_slide', 'title': 'DSA', 'body': 'Stacks and queues'},
+            slide_count=4,
+        )
+        self.assertEqual(result['actions'][0]['title'], 'DSA')
+        self.assertIsNone(result['actions'][0]['slide_number'])
+
+    def test_operation_used_as_intent(self):
+        result = plan(
+            {'intent': 'add_slide', 'title': 'DSA', 'body': 'Graphs'},
+            slide_count=2,
+        )
+        self.assertEqual(result['actions'][0]['operation'], 'add_slide')
+        self.assertEqual(result['actions'][0]['body'], 'Graphs')
+
+    def test_slides_while_editing_are_appended(self):
+        result = plan(
+            {'slides': [{'title': 'DSA', 'body': 'Big-O notation'}]},
+            slide_count=3,
+        )
+        self.assertEqual(result['intent'], 'update')
+        self.assertEqual(result['actions'][0]['operation'], 'add_slide')
+
+    def test_update_intent_with_slides_appends(self):
+        result = plan(
+            {'intent': 'update', 'slides': [{'title': 'DSA', 'body': 'Linked lists'}]},
+            slide_count=3,
+        )
+        self.assertEqual(result['actions'][0]['body'], 'Linked lists')
+
+    def test_single_action_object(self):
+        result = plan(
+            {'intent': 'update', 'actions': {'operation': 'add_slide', 'title': 'DSA', 'body': 'Heaps'}},
+            slide_count=1,
+        )
+        self.assertEqual(result['actions'][0]['title'], 'DSA')
+
+    def test_still_rejects_unrecognized_update(self):
+        with self.assertRaisesRegex(PlanError, 'create or update'):
+            plan({'note': 'hello'}, slide_count=2)
+
     def test_parses_json_wrapped_in_text(self):
         raw = 'Sure: {"intent": "update", "actions": [{"operation": "delete_slide", "slide_number": 1}]}'
         self.assertEqual(parse_plan(raw, '', 2)['actions'][0]['operation'], 'delete_slide')

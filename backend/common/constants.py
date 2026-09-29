@@ -1,5 +1,11 @@
 MAX_RETRIES = 3
 
+# Chat. A handler sees conversation.context plus this many previous messages.
+MAX_MESSAGE_LENGTH = 4000
+CHAT_HISTORY_LIMIT = 1
+# Newest messages returned with a conversation.
+CHAT_MESSAGES_LIMIT = 50
+
 GENERATE_QUESTIONS = 'GENERATE_QUESTIONS'
 PROCESS_DOCUMENT_FOR_RAG = 'PROCESS_DOCUMENT_FOR_RAG'
 

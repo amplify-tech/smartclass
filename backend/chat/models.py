@@ -3,7 +3,7 @@ from django.db import models
 
 
 class Conversation(models.Model):
-    """A user's AI chat. ``chat_type`` picks the handler that answers it."""
+    """A user's AI chat. ``chat_type`` selects the handler; ``context`` is that handler's state."""
 
     class ChatType(models.TextChoices):
         PRESENTATION = 'presentation', 'Presentation'
@@ -11,7 +11,7 @@ class Conversation(models.Model):
     chat_type = models.CharField(max_length=32, choices=ChatType.choices)
     title = models.CharField(max_length=255, blank=True)
     # Handler-owned conversation state; only the chat type's handler knows its keys.
-    context = models.JSONField(default=dict, blank=True)
+    context = models.JSONField(default=dict, blank=True, null=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

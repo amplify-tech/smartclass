@@ -177,7 +177,11 @@ def _plan(instruction, context):
         logger.exception('presentation plan LLM call failed')
         raise PlanGenerationFailed() from exc
 
-    plan = parse_plan(raw, instruction, slide_count)
+    try:
+        plan = parse_plan(raw, instruction, slide_count)
+    except PlanError:
+        logger.warning('unusable presentation plan: %s', (raw or '')[:1500])
+        raise
     logger.info(
         'presentation plan intent=%s items=%s',
         plan['intent'], len(plan.get('slides') or plan.get('actions') or []),

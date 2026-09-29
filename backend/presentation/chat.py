@@ -1,9 +1,9 @@
 """Presentation chat handler: teacher message -> LLM picks an action -> PresentationService.
 
-The LLM sees recent history and the chat's presentations, so follow-ups like
-"add a slide about reflection" reach the right deck. All Slides work still
-goes through ``PresentationService`` and the Slides MCP server. Storing the
-messages and context is ``chat.services.ChatService``'s job.
+The LLM sees the stored presentation context and the previous message, so a
+follow-up like "add a slide about reflection" reaches the right deck. All
+Slides work still goes through ``PresentationService`` and the Slides MCP
+server. Storing the messages and context is ``chat.services.ChatService``'s job.
 
 Conversation context::
 
@@ -17,7 +17,6 @@ from rest_framework.exceptions import APIException, ValidationError
 from chat.handlers import ChatHandler, ChatReply
 from common.constants import JSON
 from common.llm.factory import get_llm_provider
-from presentation.constants import CHAT_HISTORY_MESSAGES
 from presentation.exceptions import PresentationCommandFailed
 from presentation.models import Presentation
 from presentation.plan import PlanError, load_json
@@ -100,9 +99,7 @@ class PresentationChatHandler(ChatHandler):
         try:
             raw = get_llm_provider().generate(
                 system_prompt=CHAT_SYSTEM_PROMPT,
-                user_prompt=build_chat_prompt(
-                    content, history[-CHAT_HISTORY_MESSAGES:], presentations, active_id,
-                ),
+                user_prompt=build_chat_prompt(content, history, presentations, active_id),
                 response_format=JSON,
             )
             data = load_json(raw)

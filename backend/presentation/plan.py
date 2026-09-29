@@ -47,8 +47,56 @@ def parse_plan(raw, instruction, slide_count=None):
     if slide_count is None or intent == CREATE:
         return _create_plan(data, instruction)
     if intent != UPDATE:
+        # Small models often skip intent, or put the operation in its place.
+        data = _coerce_update(data, intent)
+        intent = UPDATE if data.get('intent') == UPDATE else intent
+    if intent != UPDATE:
         raise PlanError('Could not tell whether to create or update a presentation.')
     return _update_plan(data, instruction, slide_count)
+
+
+def _coerce_update(data, intent):
+    """Turn a near-miss update payload into ``{intent, actions}``.
+
+    Returns the original dict when nothing recognizable is there.
+    """
+    actions = data.get('actions')
+    if isinstance(actions, dict):
+        actions = [actions]
+    if isinstance(actions, list) and actions:
+        return {'intent': UPDATE, 'actions': actions}
+
+    operation = str(data.get('operation') or data.get('action') or '').strip().lower()
+    if operation not in OPERATIONS and intent in OPERATIONS:
+        operation = intent
+    if operation in OPERATIONS:
+        return {
+            'intent': UPDATE,
+            'actions': [{
+                'operation': operation,
+                'slide_number': data.get('slide_number'),
+                'title': data.get('title'),
+                'body': data.get('body'),
+                'text': data.get('text'),
+                'image_url': data.get('image_url'),
+            }],
+        }
+
+    slides = data.get('slides')
+    if isinstance(slides, list) and slides:
+        return {
+            'intent': UPDATE,
+            'actions': [
+                {
+                    'operation': ADD_SLIDE,
+                    'title': item.get('title') if isinstance(item, dict) else None,
+                    'body': item.get('body') if isinstance(item, dict) else None,
+                    'image_url': item.get('image_url') if isinstance(item, dict) else None,
+                }
+                for item in slides
+            ],
+        }
+    return data
 
 
 def _create_plan(data, instruction):
@@ -79,6 +127,11 @@ def _create_plan(data, instruction):
 
 def _update_plan(data, instruction, slide_count):
     actions = data.get('actions')
+    if isinstance(actions, dict):
+        actions = [actions]
+    if not isinstance(actions, list) or not actions:
+        coerced = _coerce_update(data, UPDATE)
+        actions = coerced.get('actions') if coerced is not data else None
     if not isinstance(actions, list) or not actions:
         raise PlanError('Could not work out what to change in the presentation.')
     if len(actions) > MAX_ACTIONS:
@@ -103,7 +156,7 @@ def _update_plan(data, instruction, slide_count):
 
 def _action(item, instruction, slide_count):
     item = item if isinstance(item, dict) else {}
-    operation = str(item.get('operation') or '').strip().lower()
+    operation = str(item.get('operation') or item.get('action') or '').strip().lower()
     if operation not in OPERATIONS:
         raise PlanError(f'Unsupported presentation change {operation or "(none)"!r}.')
 

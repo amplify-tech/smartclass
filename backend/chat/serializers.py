@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
-from chat.constants import MAX_MESSAGE_LENGTH
 from chat.models import Conversation, Message
+from common.constants import CHAT_MESSAGES_LIMIT, MAX_MESSAGE_LENGTH
 
 
 class ConversationSerializer(serializers.ModelSerializer):
@@ -20,7 +20,7 @@ class ConversationCreateSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'title', 'created_at', 'updated_at')
 
     def validate_context(self, value):
-        if not isinstance(value, dict):
+        if value is None or not isinstance(value, dict):
             raise serializers.ValidationError('Context must be an object.')
         return value
 
@@ -33,11 +33,18 @@ class MessageSerializer(serializers.ModelSerializer):
 
 
 class ConversationDetailSerializer(ConversationSerializer):
-    messages = MessageSerializer(many=True, read_only=True)
+    messages = serializers.SerializerMethodField()
 
     class Meta(ConversationSerializer.Meta):
         fields = ConversationSerializer.Meta.fields + ('context', 'messages')
         read_only_fields = fields
+
+    def get_messages(self, conversation):
+        recent = list(
+            conversation.messages.order_by('-created_at', '-id')[:CHAT_MESSAGES_LIMIT]
+        )
+        recent.reverse()
+        return MessageSerializer(recent, many=True).data
 
 
 class MessageCreateSerializer(serializers.Serializer):
