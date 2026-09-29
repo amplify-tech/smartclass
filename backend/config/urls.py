@@ -20,6 +20,7 @@ api_v1_patterns = [
     path('', include('exam.urls')),
     path('', include('task.urls')),
     path('', include('google_integration.urls')),
+    path('', include('chat.urls')),
     path('', include('presentation.urls')),
 ]
 

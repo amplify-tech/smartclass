@@ -1,19 +1,25 @@
-"""Presentation chat: teacher message -> LLM picks an action -> PresentationService.
+"""Presentation chat handler: teacher message -> LLM picks an action -> PresentationService.
 
 The LLM sees recent history and the chat's presentations, so follow-ups like
 "add a slide about reflection" reach the right deck. All Slides work still
-goes through ``PresentationService`` and the Slides MCP server.
+goes through ``PresentationService`` and the Slides MCP server. Storing the
+messages and context is ``chat.services.ChatService``'s job.
+
+Conversation context::
+
+    {'presentations': [{'id', 'title', 'url'}], 'active_presentation_id': id}
 """
 
 import logging
 
 from rest_framework.exceptions import APIException, ValidationError
 
+from chat.handlers import ChatHandler, ChatReply
 from common.constants import JSON
 from common.llm.factory import get_llm_provider
 from presentation.constants import CHAT_HISTORY_MESSAGES
 from presentation.exceptions import PresentationCommandFailed
-from presentation.models import Message
+from presentation.models import Presentation
 from presentation.plan import PlanError, load_json
 from presentation.prompts import CHAT_SYSTEM_PROMPT, build_chat_prompt
 from presentation.services import PresentationService
@@ -30,38 +36,30 @@ _NEEDS_PRESENTATION = (UPDATE, INFO, DELETE)
 _FALLBACK_REPLY = 'Sorry, I could not understand that. Could you rephrase it?'
 
 
-class ChatService:
-    def send(self, conversation, content):
-        """Save the teacher message, act on it, and save the assistant reply."""
-        history = [
-            (m.role, m.content)
-            for m in conversation.messages.order_by('-created_at', '-id')[:CHAT_HISTORY_MESSAGES]
-        ][::-1]
-        Message.objects.create(conversation=conversation, role=Message.USER, content=content)
+class PresentationChatHandler(ChatHandler):
+    def respond(self, conversation, content, history):
+        user = conversation.created_by
+        active_id = conversation.context.get('active_presentation_id')
+        presentations = _load(user, [p['id'] for p in conversation.context.get('presentations', [])])
 
-        presentation, is_error = None, False
+        is_error = False
         try:
-            reply, presentation = self._respond(conversation, content, history)
+            reply, touched = self._respond(user, content, history, presentations, active_id)
         except PresentationCommandFailed as exc:
-            presentation = self._attach(conversation, exc.presentation)
-            reply, is_error = str(exc.detail), True
+            reply, touched, is_error = str(exc.detail), exc.presentation, True
         except APIException as exc:
-            reply, is_error = _error_text(exc), True
+            reply, touched, is_error = _error_text(exc), None, True
 
-        if not conversation.title:
-            conversation.title = content[:80]
-        conversation.save(update_fields=['title', 'updated_at'])
-        return Message.objects.create(
-            conversation=conversation,
-            role=Message.ASSISTANT,
-            content=reply,
-            presentation=presentation,
-            is_error=is_error,
-        )
+        ids = [p.id for p in presentations]
+        if touched is not None:
+            active_id = touched.id
+            if touched.id not in ids:
+                ids.append(touched.id)
+        return ChatReply(reply, is_error=is_error, context=_context(_load(user, ids), active_id))
 
-    def _respond(self, conversation, content, history):
-        presentations = list(conversation.presentations.all())
-        decision = self._decide(conversation, content, history, presentations)
+    def _respond(self, user, content, history, presentations, active_id):
+        """Return ``(reply, presentation the reply is about or None)``."""
+        decision = self._decide(content, history, presentations, active_id)
         action = decision['action']
 
         if action == REPLY:
@@ -70,20 +68,21 @@ class ChatService:
         instruction = decision['instruction'] or content
         service = PresentationService()
         if action == CREATE:
-            record, result = service.run_prompt(conversation.created_by, instruction)
-            record = self._attach(conversation, record)
-            return f'Created "{record.title}" with {_slides(result["slides"])}.', record
+            record, result = service.run_prompt(user, instruction)
+            return f'Created "{record.title}" with {_slides(result["slides"])}.\n{record.url}', record
 
         target = next((p for p in presentations if p.id == decision['presentation_id']), None)
         if target is None:
             return _which_presentation(presentations), None
 
         if action == UPDATE:
-            record, result = service.run_prompt(conversation.created_by, instruction, target)
-            record = self._attach(conversation, record)
+            record, result = service.run_prompt(user, instruction, target)
             if record.id != target.id:
-                return f'Created a new presentation "{record.title}" with {_slides(result["slides"])}.', record
-            return f'Updated "{record.title}". It now has {_slides(result["slides"])}.', record
+                return (
+                    f'Created a new presentation "{record.title}" with {_slides(result["slides"])}.\n{record.url}',
+                    record,
+                )
+            return f'Updated "{record.title}". It now has {_slides(result["slides"])}.\n{record.url}', record
 
         if action == INFO:
             slides = service.get_slides(target)
@@ -97,18 +96,13 @@ class ChatService:
         service.delete(target)
         return f'Deleted the presentation "{title}".', None
 
-    def _decide(self, conversation, content, history, presentations):
-        last_used = (
-            conversation.messages
-            .filter(role=Message.ASSISTANT, presentation__isnull=False)
-            .order_by('-created_at', '-id')
-            .values_list('presentation_id', flat=True)
-            .first()
-        )
+    def _decide(self, content, history, presentations, active_id):
         try:
             raw = get_llm_provider().generate(
                 system_prompt=CHAT_SYSTEM_PROMPT,
-                user_prompt=build_chat_prompt(content, history, presentations, last_used),
+                user_prompt=build_chat_prompt(
+                    content, history[-CHAT_HISTORY_MESSAGES:], presentations, active_id,
+                ),
                 response_format=JSON,
             )
             data = load_json(raw)
@@ -133,12 +127,19 @@ class ChatService:
             'reply': str(data.get('reply') or '').strip(),
         }
 
-    @staticmethod
-    def _attach(conversation, record):
-        if record is not None and record.conversation_id != conversation.id:
-            record.conversation = conversation
-            record.save(update_fields=['conversation', 'updated_at'])
-        return record
+
+def _load(user, ids):
+    """The user's presentations with these IDs, in order; deleted ones are dropped."""
+    by_id = Presentation.objects.filter(created_by=user).in_bulk(ids)
+    return [by_id[i] for i in ids if i in by_id]
+
+
+def _context(presentations, active_id):
+    ids = {p.id for p in presentations}
+    return {
+        'presentations': [{'id': p.id, 'title': p.title, 'url': p.url} for p in presentations],
+        'active_presentation_id': active_id if active_id in ids else None,
+    }
 
 
 def _pick_presentation(value, content, presentations):

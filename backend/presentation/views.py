@@ -3,56 +3,14 @@ from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 
-from presentation.chat import ChatService
 from presentation.exceptions import PresentationCommandFailed
-from presentation.models import Conversation, Presentation
+from presentation.models import Presentation
 from presentation.plan import CREATE
 from presentation.serializers import (
-    ConversationDetailSerializer,
-    ConversationSerializer,
-    MessageCreateSerializer,
     PresentationPromptSerializer,
     PresentationSerializer,
 )
 from presentation.services import PresentationService
-
-
-class ConversationViewSet(
-    mixins.ListModelMixin,
-    mixins.CreateModelMixin,
-    mixins.RetrieveModelMixin,
-    mixins.DestroyModelMixin,
-    viewsets.GenericViewSet,
-):
-    """Teacher's presentation chats. Every message goes through ``POST {id}/messages/``."""
-
-    permission_classes = [IsAuthenticated]
-    search_fields = ['title']
-
-    def get_queryset(self):
-        return Conversation.objects.filter(created_by=self.request.user)
-
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return ConversationDetailSerializer
-        if self.action == 'messages':
-            return MessageCreateSerializer
-        return ConversationSerializer
-
-    def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
-
-    @action(detail=True, methods=['post'])
-    def messages(self, request, pk=None):
-        """Send a teacher message; returns the whole updated conversation."""
-        conversation = self.get_object()
-        serializer = MessageCreateSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        ChatService().send(conversation, serializer.validated_data['content'])
-        conversation = self.get_queryset().prefetch_related(
-            'messages__presentation', 'presentations',
-        ).get(pk=conversation.pk)
-        return Response(ConversationDetailSerializer(conversation).data)
 
 
 class PresentationViewSet(

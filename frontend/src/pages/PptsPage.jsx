@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
-import { listConversations } from '../api/presentations'
+import { createChat } from '../api/chat'
+import { listPresentations } from '../api/presentations'
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -17,77 +19,168 @@ import { formatDateTime } from '../utils/formatDate'
 import { parsePaginatedResponse } from '../utils/pagination'
 
 export default function PptsPage() {
-  const [chats, setChats] = useState([])
+  const navigate = useNavigate()
+  const [presentations, setPresentations] = useState([])
   const [status, setStatus] = useState('loading')
   const [error, setError] = useState(null)
-  const [reloadKey, setReloadKey] = useState(0)
+  const [chatError, setChatError] = useState(null)
+  const [creatingChat, setCreatingChat] = useState(null)
 
   useEffect(() => {
     let cancelled = false
-    listConversations({ page_size: 100 })
-      .then(({ data }) => {
+
+    async function loadPresentations() {
+      setStatus('loading')
+      setError(null)
+      try {
+        const { data } = await listPresentations()
         if (cancelled) return
-        setChats(parsePaginatedResponse(data).results)
+        setPresentations(parsePaginatedResponse(data).results)
         setStatus('ready')
-      })
-      .catch((err) => {
+      } catch (err) {
         if (cancelled) return
-        setError(getApiErrorMessage(err, 'Failed to load chats'))
+        setPresentations([])
+        setError(getApiErrorMessage(err, 'Failed to load presentations'))
         setStatus('error')
-      })
+      }
+    }
+
+    loadPresentations()
     return () => {
       cancelled = true
     }
-  }, [reloadKey])
+  }, [])
 
-  function retry() {
+  const retry = () => {
     setStatus('loading')
-    setReloadKey((n) => n + 1)
+    setError(null)
+    listPresentations()
+      .then(({ data }) => {
+        setPresentations(parsePaginatedResponse(data).results)
+        setStatus('ready')
+      })
+      .catch((err) => {
+        setPresentations([])
+        setError(getApiErrorMessage(err, 'Failed to load presentations'))
+        setStatus('error')
+      })
   }
 
-  const newChat = (
-    <Button as={Link} to="/ppts/chat/new">
-      New chat
-    </Button>
-  )
+  async function openNewChat(presentation = null) {
+    const key = presentation?.id || 'new'
+    if (creatingChat) return
+    setCreatingChat(key)
+    setChatError(null)
+    try {
+      const context = presentation
+        ? {
+            presentations: [{
+              id: presentation.id,
+              title: presentation.title,
+              url: presentation.url,
+            }],
+            active_presentation_id: presentation.id,
+          }
+        : {}
+      const { data } = await createChat('presentation', context)
+      navigate(`/ppts/chat/${data.id}`)
+    } catch (err) {
+      setChatError(getApiErrorMessage(err, 'Failed to create chat'))
+    } finally {
+      setCreatingChat(null)
+    }
+  }
 
   return (
     <Box>
       <PageHeader
-        breadcrumbs={[{ label: 'Home', to: '/' }, { label: 'PPT' }]}
+        breadcrumbs={[
+          { label: 'Home', to: '/' },
+          { label: 'PPT' },
+        ]}
         title="PPT"
-        description="Create and edit Google Slides presentations by chatting."
-        actions={newChat}
+        description="Create and open Google Slides presentations."
+        actions={
+          <Button onClick={() => openNewChat()} disabled={Boolean(creatingChat)}>
+            {creatingChat === 'new' ? 'Creating…' : 'New chat'}
+          </Button>
+        }
       />
+
+      {chatError ? <Alert variant="danger">{chatError}</Alert> : null}
 
       <Card>
         <CardBody className="sc-card-body">
-          {status === 'loading' && <LoadingBlock label="Loading chats…" />}
+          {status === 'loading' && <LoadingBlock label="Loading presentations…" />}
 
-          {status === 'error' && <ErrorPanel message={error} onRetry={retry} />}
+          {status === 'error' && (
+            <ErrorPanel message={error} onRetry={retry} />
+          )}
 
-          {status === 'ready' && chats.length === 0 && (
+          {status === 'ready' && presentations.length === 0 && (
             <EmptyState
-              title="No chats yet"
+              title="No presentations yet"
               description="Start a chat and ask for a presentation, e.g. a 3-slide PPT on Optics."
-              action={newChat}
+              action={
+                <Button onClick={() => openNewChat()} disabled={Boolean(creatingChat)}>
+                  {creatingChat === 'new' ? 'Creating…' : 'New chat'}
+                </Button>
+              }
             />
           )}
 
-          {status === 'ready' && chats.length > 0 && (
-            <Box className="list-group list-group-flush">
-              {chats.map((chat) => (
-                <Link
-                  key={chat.id}
-                  to={`/ppts/chat/${chat.id}`}
-                  className="list-group-item list-group-item-action d-flex justify-content-between gap-3"
-                >
-                  <span className="fw-medium text-truncate">{chat.title || 'Untitled chat'}</span>
-                  <span className="small text-muted text-nowrap">
-                    {formatDateTime(chat.updated_at)}
-                  </span>
-                </Link>
-              ))}
+          {status === 'ready' && presentations.length > 0 && (
+            <Box className="table-responsive">
+              <table className="table table-hover align-middle mb-0 sc-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Title</th>
+                    <th scope="col">Created</th>
+                    <th scope="col">Updated</th>
+                    <th scope="col" className="text-end">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {presentations.map((ppt) => (
+                    <tr key={ppt.id}>
+                      <td className="fw-medium">{ppt.title || '—'}</td>
+                      <td className="text-nowrap small text-muted">
+                        {formatDateTime(ppt.created_at)}
+                      </td>
+                      <td className="text-nowrap small text-muted">
+                        {formatDateTime(ppt.updated_at)}
+                      </td>
+                      <td className="text-end text-nowrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="me-2"
+                          onClick={() => openNewChat(ppt)}
+                          disabled={Boolean(creatingChat)}
+                        >
+                          {creatingChat === ppt.id ? 'Creating…' : 'Chat'}
+                        </Button>
+                        {ppt.url ? (
+                          <Button
+                            as="a"
+                            href={ppt.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            size="sm"
+                            variant="outline"
+                          >
+                            View
+                          </Button>
+                        ) : (
+                          <span className="text-muted small">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </Box>
           )}
         </CardBody>

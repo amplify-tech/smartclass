@@ -73,7 +73,6 @@ function App() {
             <Route path="/documents" element={<DocumentsPage />} />
             <Route path="/documents/upload" element={<DocumentUploadPage />} />
             <Route path="/ppts" element={<PptsPage />} />
-            <Route path="/ppts/chat/new" element={<PresentationChatPage />} />
             <Route path="/ppts/chat/:chatId" element={<PresentationChatPage />} />
           </Route>
         </Route>

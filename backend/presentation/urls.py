@@ -1,13 +1,8 @@
 from rest_framework.routers import SimpleRouter
 
-from presentation.views import ConversationViewSet, PresentationViewSet
+from presentation.views import PresentationViewSet
 
 router = SimpleRouter()
 router.register('presentations', PresentationViewSet, basename='presentation')
-router.register(
-    'presentation-conversations',
-    ConversationViewSet,
-    basename='presentation-conversation',
-)
 
 urlpatterns = router.urls
