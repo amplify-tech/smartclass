@@ -44,6 +44,13 @@ from presentation.prompts import (
 
 logger = logging.getLogger(__name__)
 
+# These operations are the MCP tool name plus the extra arguments they need.
+_TOOL_ARGUMENTS = {
+    DELETE_SLIDE: lambda action: {},
+    ADD_TEXT: lambda action: {'text': action['text']},
+    ADD_IMAGE: lambda action: {'image_url': action['image_url']},
+}
+
 
 class PresentationService:
     def run_prompt(self, user, instruction, presentation=None):
@@ -61,22 +68,13 @@ class PresentationService:
             'slides': None,
         }
         try:
-            async_to_sync(_run_prompt)(instruction, google_id, outcome)
-            error = None
+            _connect(lambda client: _run_prompt(client, instruction, google_id, outcome))
         except PlanError as exc:
             raise ValidationError({'prompt': [str(exc)]}) from exc
-        except MCPToolError as exc:
-            error = str(exc)
         except MCPClientError as exc:
-            if not outcome['created']:
-                raise SlidesUnavailable() from exc
-            error = str(exc)
+            _raise_slides_error(exc, user, presentation, outcome)
 
         record = self._save(user, presentation, outcome)
-        if error:
-            logger.warning('presentation prompt failed after %s step(s): %s', len(outcome['steps']), error)
-            raise PresentationCommandFailed(error, record, outcome['steps'])
-
         logger.info(
             'presentation %s %s with %s MCP call(s)',
             record.id, outcome['plan']['intent'], len(outcome['steps']),
@@ -89,9 +87,12 @@ class PresentationService:
 
     def get_slides(self, presentation):
         """Live slide list for a stored presentation."""
-        info = _call_tool('get_presentation', {
-            'presentation_id': presentation.google_presentation_id,
-        })
+        try:
+            info = _connect(lambda client: client.call_tool('get_presentation', {
+                'presentation_id': presentation.google_presentation_id,
+            }))
+        except MCPClientError as exc:
+            _raise_slides_error(exc)
         if info['title'] and info['title'] != presentation.title:
             presentation.title = info['title']
             presentation.save(update_fields=['title', 'updated_at'])
@@ -99,9 +100,12 @@ class PresentationService:
 
     def delete(self, presentation):
         """Delete the Google file, then the record."""
-        _call_tool('delete_presentation', {
-            'presentation_id': presentation.google_presentation_id,
-        })
+        try:
+            _connect(lambda client: client.call_tool('delete_presentation', {
+                'presentation_id': presentation.google_presentation_id,
+            }))
+        except MCPClientError as exc:
+            _raise_slides_error(exc)
         presentation.delete()
 
     @staticmethod
@@ -120,41 +124,58 @@ class PresentationService:
         return presentation
 
 
-def _call_tool(name, arguments):
-    async def call():
+def _connect(work):
+    """Run ``work(client)`` inside one Slides MCP session."""
+    async def run():
         async with SlidesMCPClient() as client:
-            return await client.call_tool(name, arguments)
+            return await work(client)
 
-    try:
-        return async_to_sync(call)()
-    except MCPToolError as exc:
-        raise PresentationCommandFailed(str(exc)) from exc
-    except MCPClientError as exc:
-        raise SlidesUnavailable() from exc
+    return async_to_sync(run)()
 
 
-async def _run_prompt(instruction, google_id, outcome):
+def _raise_slides_error(exc, user=None, presentation=None, outcome=None):
+    """Turn an MCP failure into the error chat already shows.
+
+    A tool error keeps a deck that was created or was already selected.
+    A dropped connection does that only after a new deck exists. Before
+    that, Slides is reported as unavailable.
+    """
+    created = outcome.get('created') if outcome else None
+    if isinstance(exc, MCPToolError) or created:
+        record = None
+        steps = []
+        if outcome is not None and (created or presentation is not None):
+            record = PresentationService._save(user, presentation, outcome)
+            steps = outcome['steps']
+        logger.warning(
+            'presentation MCP call failed after %s step(s): %s',
+            len(steps), exc,
+        )
+        raise PresentationCommandFailed(str(exc), record, steps) from exc
+    raise SlidesUnavailable() from exc
+
+
+async def _run_prompt(client, instruction, google_id, outcome):
     """Fill ``outcome`` as work completes so a failure keeps partial results."""
-    async with SlidesMCPClient() as client:
-        context = None
-        if google_id:
-            context = await client.call_tool(
-                'get_presentation', {'presentation_id': google_id},
-            )
-
-        plan = await asyncio.to_thread(_plan, instruction, context)
-        outcome['plan'] = plan
-
-        if plan['intent'] == CREATE:
-            google_id = await _create(client, plan, outcome)
-        else:
-            await _update(client, plan, context, outcome)
-
-        info = await client.call_tool(
+    context = None
+    if google_id:
+        context = await client.call_tool(
             'get_presentation', {'presentation_id': google_id},
         )
-        outcome['slides'] = info['slides']
-        outcome['title'] = info['title']
+
+    plan = await asyncio.to_thread(_plan, instruction, context)
+    outcome['plan'] = plan
+
+    if plan['intent'] == CREATE:
+        google_id = await _create(client, plan, outcome)
+    else:
+        await _update(client, plan, context, outcome)
+
+    info = await client.call_tool(
+        'get_presentation', {'presentation_id': google_id},
+    )
+    outcome['slides'] = info['slides']
+    outcome['title'] = info['title']
 
 
 def _plan(instruction, context):
@@ -224,19 +245,12 @@ async def _update(client, plan, context, outcome):
             continue
 
         slide_id = slide_ids[action['slide_number'] - 1]
-        target = {'presentation_id': presentation_id, 'slide_id': slide_id}
+        arguments = {'presentation_id': presentation_id, 'slide_id': slide_id}
         if operation == UPDATE_SLIDE:
-            await _step(client, outcome, 'update_slide', {
-                **target, **_title_body(action),
-            })
-        elif operation == DELETE_SLIDE:
-            await _step(client, outcome, 'delete_slide', target)
-        elif operation == ADD_TEXT:
-            await _step(client, outcome, 'add_text', {**target, 'text': action['text']})
-        elif operation == ADD_IMAGE:
-            await _step(client, outcome, 'add_image', {
-                **target, 'image_url': action['image_url'],
-            })
+            arguments.update(_title_body(action))
+        else:
+            arguments.update(_TOOL_ARGUMENTS[operation](action))
+        await _step(client, outcome, operation, arguments)
 
 
 async def _add_slide(client, outcome, presentation_id):

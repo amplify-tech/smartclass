@@ -19,14 +19,12 @@ from common.constants import JSON
 from common.llm.factory import get_llm_provider
 from presentation.exceptions import PresentationCommandFailed
 from presentation.models import Presentation
-from presentation.plan import PlanError, load_json
+from presentation.plan import CREATE, UPDATE, PlanError, load_json
 from presentation.prompts import CHAT_SYSTEM_PROMPT, build_chat_prompt
 from presentation.services import PresentationService
 
 logger = logging.getLogger(__name__)
 
-CREATE = 'create'
-UPDATE = 'update'
 INFO = 'info'
 DELETE = 'delete'
 REPLY = 'reply'
