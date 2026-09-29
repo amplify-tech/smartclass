@@ -29,20 +29,6 @@ class CreatedPresentation(TypedDict):
     url: str
 
 
-class SlideInfo(TypedDict):
-    slide_id: str
-    index: int
-    text: str
-    image_urls: list[str]
-
-
-class PresentationInfo(TypedDict):
-    presentation_id: str
-    title: str
-    url: str
-    slides: list[SlideInfo]
-
-
 class CreatedSlide(TypedDict):
     presentation_id: str
     slide_id: str
@@ -91,10 +77,12 @@ def create_presentation(title: str) -> CreatedPresentation:
     return _call(lambda: google_slides_service.create_presentation(title))
 
 
-def get_presentation(presentation_id: str) -> PresentationInfo:
+def get_presentation(presentation_id: str) -> dict:
     """Read a presentation's title, URL, and its slides.
 
     Each slide includes its ID, zero-based index, text, and image URLs.
+    Slide count and text vary, so this tool has no fixed output schema.
+    Callers read the JSON object from the tool result.
     """
     presentation_id = _text(presentation_id, 'presentation_id')
     return _call(lambda: google_slides_service.get_presentation(presentation_id))

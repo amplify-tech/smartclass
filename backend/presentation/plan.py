@@ -4,7 +4,7 @@ A plan is one of::
 
     {'intent': 'create', 'title': str, 'slides': [{'title', 'body', 'image_url'}]}
     {'intent': 'update', 'actions': [{'operation', 'slide_number', 'title',
-                                      'body', 'text', 'image_url'}]}
+                                      'body', 'image_url'}]}
 
 Missing optional fields are ``None``. Slide numbers are 1-based and are
 checked against the presentation the LLM was shown.
@@ -26,10 +26,9 @@ UPDATE = 'update'
 ADD_SLIDE = 'add_slide'
 UPDATE_SLIDE = 'update_slide'
 DELETE_SLIDE = 'delete_slide'
-ADD_TEXT = 'add_text'
 ADD_IMAGE = 'add_image'
-OPERATIONS = (ADD_SLIDE, UPDATE_SLIDE, DELETE_SLIDE, ADD_TEXT, ADD_IMAGE)
-_TARGETS_SLIDE = (UPDATE_SLIDE, DELETE_SLIDE, ADD_TEXT, ADD_IMAGE)
+OPERATIONS = (ADD_SLIDE, UPDATE_SLIDE, DELETE_SLIDE, ADD_IMAGE)
+_TARGETS_SLIDE = (UPDATE_SLIDE, DELETE_SLIDE, ADD_IMAGE)
 
 
 class PlanError(ValueError):
@@ -77,7 +76,6 @@ def _coerce_update(data, intent):
                 'slide_number': data.get('slide_number'),
                 'title': data.get('title'),
                 'body': data.get('body'),
-                'text': data.get('text'),
                 'image_url': data.get('image_url'),
             }],
         }
@@ -165,7 +163,6 @@ def _action(item, instruction, slide_count):
         'slide_number': None,
         'title': _text(item.get('title'), MAX_TITLE_LENGTH),
         'body': _text(item.get('body'), MAX_TEXT_LENGTH),
-        'text': _text(item.get('text'), MAX_TEXT_LENGTH),
         'image_url': None,
     }
 
@@ -179,10 +176,6 @@ def _action(item, instruction, slide_count):
     elif operation == UPDATE_SLIDE:
         if not (action['title'] or action['body']):
             raise PlanError(f'No new title or text for slide {action["slide_number"]}.')
-    elif operation == ADD_TEXT:
-        action['text'] = action['text'] or action['body']
-        if not action['text']:
-            raise PlanError(f'No text to add to slide {action["slide_number"]}.')
     elif operation == ADD_IMAGE:
         action['image_url'] = _image_url(item.get('image_url'), instruction, strict=True)
     return action

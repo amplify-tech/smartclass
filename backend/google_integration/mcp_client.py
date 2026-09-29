@@ -15,6 +15,7 @@ Sync code can wrap a coroutine with ``asyncio.run`` or
 ``asgiref.sync.async_to_sync``.
 """
 
+import json
 import logging
 import sys
 
@@ -93,9 +94,12 @@ class SlidesMCPClient:
                 return tools
 
     async def call_tool(self, name, arguments=None):
-        """Call a tool and return its structured result, or its text if none.
+        """Call a tool and return its result.
 
-        Raises ``MCPToolError`` when the tool reports an error.
+        A tool with an output schema returns ``structured_content``. A tool
+        without one returns its JSON text parsed into an object or array, or
+        the raw text when that text is not JSON. Raises ``MCPToolError`` when
+        the tool reports an error.
         """
         result = await self._request(
             f'call tool {name!r}',
@@ -108,6 +112,10 @@ class SlidesMCPClient:
             raise MCPToolError(name, text or f'Tool {name!r} failed.')
         if result.structured_content is not None:
             return result.structured_content
+        # Tools without an output schema still return their value as JSON text.
+        parsed = _json_value(text)
+        if parsed is not None:
+            return parsed
         return text
 
     def _server(self):
@@ -140,6 +148,20 @@ class SlidesMCPClient:
                 f'Lost connection to the Slides MCP server during {action}: '
                 f'{_describe(exc)}'
             ) from exc
+
+
+def _json_value(text):
+    """A JSON object or array, or ``None`` when the text is not one."""
+    text = (text or '').strip()
+    if not text or text[0] not in '{[':
+        return None
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(value, (dict, list)):
+        return value
+    return None
 
 
 def _describe(exc):

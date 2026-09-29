@@ -64,6 +64,15 @@ class UpdatePlanTests(SimpleTestCase):
                 slide_count=2,
             )
 
+    def test_rejects_add_text(self):
+        with self.assertRaises(PlanError):
+            plan(
+                {'intent': 'update', 'actions': [
+                    {'operation': 'add_text', 'slide_number': 1, 'text': 'Extra'},
+                ]},
+                slide_count=2,
+            )
+
     def test_add_image_needs_url_from_instruction(self):
         action = {'operation': 'add_image', 'slide_number': 1, 'image_url': IMAGE}
         with self.assertRaises(PlanError):

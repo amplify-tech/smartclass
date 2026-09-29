@@ -28,7 +28,6 @@ from presentation.models import Presentation
 from presentation.plan import (
     ADD_IMAGE,
     ADD_SLIDE,
-    ADD_TEXT,
     CREATE,
     DELETE_SLIDE,
     UPDATE_SLIDE,
@@ -47,7 +46,6 @@ logger = logging.getLogger(__name__)
 # These operations are the MCP tool name plus the extra arguments they need.
 _TOOL_ARGUMENTS = {
     DELETE_SLIDE: lambda action: {},
-    ADD_TEXT: lambda action: {'text': action['text']},
     ADD_IMAGE: lambda action: {'image_url': action['image_url']},
 }
 
