@@ -37,7 +37,7 @@
 }
 
 .sc-hero {
-    padding: 100px 0 80px;
+    padding: 42px 0 30px;
     background:
     radial-gradient(circle at 15% 15%, rgba(91,92,226,.10), transparent 28%),
     radial-gradient(circle at 85% 20%, rgba(120,90,240,.08), transparent 25%),
@@ -486,7 +486,7 @@
     }
 
     .sc-hero {
-    padding-top: 70px;
+    padding-top: 50px;
     }
 
     .sc-problem-grid,

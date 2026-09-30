@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom'
 import LoginForm from '../components/auth/LoginForm'
 import RegisterForm from '../components/auth/RegisterForm'
 import {
-  Box,
   Card,
   CardBody,
   Tab,
@@ -12,7 +11,8 @@ import {
   Tabs,
 } from '../components/common_ui'
 
-import "./PublicNavbar.css";
+import './Home.css'
+import './PublicNavbar.css'
 
 export default function AuthPage() {
   return (
@@ -36,25 +36,35 @@ export default function AuthPage() {
       </div>
     </header>
 
-    <Box className="container py-5">
-      <Box className="row justify-content-center">
-        <Box className="col-md-6 col-lg-5">
-          <Box className="text-center mb-4">
-            <h1 className="h3 mb-1">SmartClass</h1>
-            <p className="text-muted mb-0">Sign in or create an account</p>
-          </Box>
+    <main className="smartclass-home">
+      <section className="sc-hero sc-auth-hero">
+        <div className="sc-container sc-hero-grid">
+          <div>
+            <span className="sc-eyebrow">AI-powered learning & teaching</span>
 
-          <Card className="shadow-sm">
+            <h1>
+              Turn your teaching material into{" "}
+              <span>ready-to-use learning content.</span>
+            </h1>
+
+            <p className="sc-hero-text">
+              SmartClass helps teachers create questions, quizzes, exams and
+              lecture presentations from their own material and helps
+              learners study smarter from the content they already have.
+            </p>
+          </div>
+
+          <Card className="sc-auth-card">
+            <Tabs className="sc-auth-switch">
+              <Tab id="login-tab" target="#login-pane" active>
+                Login
+              </Tab>
+              <Tab id="register-tab" target="#register-pane">
+                Register
+              </Tab>
+            </Tabs>
+
             <CardBody className="p-4">
-              <Tabs className="mb-4">
-                <Tab id="login-tab" target="#login-pane" active>
-                  Login
-                </Tab>
-                <Tab id="register-tab" target="#register-pane">
-                  Register
-                </Tab>
-              </Tabs>
-
               <TabContent>
                 <TabPane id="login-pane" labelledBy="login-tab" active>
                   <LoginForm />
@@ -65,9 +75,9 @@ export default function AuthPage() {
               </TabContent>
             </CardBody>
           </Card>
-        </Box>
-      </Box>
-    </Box>
+        </div>
+      </section>
+    </main>
   </>
   )
 }

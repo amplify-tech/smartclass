@@ -45,7 +45,7 @@ export default function Home() {
 
             <p className="sc-hero-text">
               SmartClass helps teachers create questions, quizzes, exams and
-              lecture presentations from their own material — while helping
+              lecture presentations from their own material and helps
               learners study smarter from the content they already have.
             </p>
 
