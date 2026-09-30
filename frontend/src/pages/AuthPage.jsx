@@ -10,8 +10,30 @@ import {
   Tabs,
 } from '../components/common_ui'
 
+import "./PublicNavbar.css";
+
 export default function AuthPage() {
   return (
+    <>
+    <header className="sc-navbar">
+      <div className="sc-nav-container">
+        <a href="/" className="sc-logo">
+          SmartClass
+        </a>
+
+        <nav className="sc-nav-links" aria-label="Main navigation">
+          <a href="/#features">Features</a>
+          <a href="/#faq">FAQ</a>
+        </nav>
+
+        <div className="sc-nav-actions">
+          <a href="/" className="sc-nav-cta">
+            About
+          </a>
+        </div>
+      </div>
+    </header>
+
     <Box className="container py-5">
       <Box className="row justify-content-center">
         <Box className="col-md-6 col-lg-5">
@@ -44,5 +66,6 @@ export default function AuthPage() {
         </Box>
       </Box>
     </Box>
+  </>
   )
 }

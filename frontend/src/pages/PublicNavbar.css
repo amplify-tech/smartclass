@@ -1,0 +1,78 @@
+.sc-navbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid #e5e7eb;
+  }
+  
+  .sc-nav-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    height: 72px;
+    padding: 0 24px;
+  
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 32px;
+  }
+  
+  .sc-logo {
+    font-size: 21px;
+    font-weight: 800;
+    color: #111827;
+    text-decoration: none;
+    letter-spacing: -0.5px;
+  }
+  
+  .sc-nav-links {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    margin-left: auto;
+  }
+  
+  .sc-nav-links a,
+  .sc-login-link {
+    color: #4b5563;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+  }
+  
+  .sc-nav-links a:hover,
+  .sc-login-link:hover {
+    color: #111827;
+  }
+  
+  .sc-nav-actions {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+  }
+  
+  .sc-nav-cta {
+    padding: 10px 18px;
+    border-radius: 8px;
+    background: #111827;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  
+  .sc-nav-cta:hover {
+    background: #374151;
+  }
+  
+  @media (max-width: 768px) {
+    .sc-nav-links {
+      display: none;
+    }
+  
+    .sc-nav-container {
+      height: 64px;
+    }
+  }

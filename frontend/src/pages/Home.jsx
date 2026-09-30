@@ -1,7 +1,33 @@
 import "./Home.css";
+import "./PublicNavbar.css";
 
 export default function Home() {
   return (
+    <>
+    <header className="sc-navbar">
+      <div className="sc-nav-container">
+        <a href="/" className="sc-logo">
+          SmartClass
+        </a>
+
+        <nav className="sc-nav-links" aria-label="Main navigation">
+          <a href="#features">Features</a>
+          <a href="#how-it-works">How it works</a>
+          <a href="#about">About</a>
+          <a href="#faq">FAQ</a>
+        </nav>
+
+        <div className="sc-nav-actions">
+          <a href="/login" className="sc-login-link">
+            Log in
+          </a>
+
+          <a href="/login" className="sc-nav-cta">
+            Get started
+          </a>
+        </div>
+      </div>
+    </header>
     <main className="smartclass-home">
 
       {/* HERO */}
@@ -127,9 +153,9 @@ export default function Home() {
       </section>
 
       {/* SOLUTION */}
-      <section className="sc-section">
+      <section className="sc-section" id="features">
         <div className="sc-container">
-          <div className="sc-centered">
+          <div className="sc-centered" >
             <span className="sc-eyebrow">The solution</span>
             <h2>One place to create, organize and learn.</h2>
             <p>
@@ -341,7 +367,7 @@ export default function Home() {
       </section>
 
       {/* ABOUT */}
-      <section className="sc-section sc-problem">
+      <section className="sc-section sc-problem" id="about">
         <div className="sc-container sc-about">
           <h2>Built around the material you already have.</h2>
 
@@ -361,7 +387,7 @@ export default function Home() {
       </section>
 
       {/* FAQ */}
-      <section className="sc-section">
+      <section className="sc-section" id="faq">
         <div className="sc-container">
           <div className="sc-centered">
             <span className="sc-eyebrow">FAQ</span>
@@ -430,18 +456,19 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      {/* FOOTER */}
-      <footer className="sc-footer">
-        <div className="sc-container sc-footer-inner">
-          <div>
-            <strong>SmartClass</strong>
-            <div>AI-powered tools for teaching and learning.</div>
-          </div>
-
-          <div>© {new Date().getFullYear()} SmartClass</div>
-        </div>
-      </footer>
     </main>
+
+    {/* FOOTER */}
+    <footer className="sc-footer">
+      <div className="sc-container sc-footer-inner">
+        <div>
+          <strong>SmartClass</strong>
+          <div>AI-powered tools for teaching and learning.</div>
+        </div>
+
+        <div>© {new Date().getFullYear()} SmartClass</div>
+      </div>
+    </footer>
+  </>
   );
 }
