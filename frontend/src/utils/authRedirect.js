@@ -2,8 +2,8 @@ import { clearTokens, isAuthenticated } from './authTokens'
 
 export function redirectToAuth() {
   clearTokens()
-  if (window.location.pathname !== '/auth') {
-    window.location.replace('/auth')
+  if (window.location.pathname !== '/login') {
+    window.location.replace('/login')
   }
 }
 
@@ -21,9 +21,9 @@ export function installAuthHistoryGuard() {
   window.addEventListener('pageshow', (event) => {
     if (!event.persisted) return
 
-    const onAuthPage = window.location.pathname === '/auth'
+    const onAuthPage = window.location.pathname === '/login'
     if (!isAuthenticated() && !onAuthPage) {
-      window.location.replace('/auth')
+      window.location.replace('/login')
       return
     }
     if (isAuthenticated() && onAuthPage) {

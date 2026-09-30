@@ -14,6 +14,7 @@ import ExamsPage from './pages/ExamsPage'
 import GenerateQuestionsPage from './pages/GenerateQuestionsPage'
 import GenerationTaskPage from './pages/GenerationTaskPage'
 import HomePage from './pages/HomePage'
+import Home from './pages/Home'
 import PendingTasksPage from './pages/PendingTasksPage'
 import PptsPage from './pages/PptsPage'
 import PresentationChatPage from './pages/PresentationChatPage'
@@ -21,7 +22,7 @@ import QuestionBankPage from './pages/QuestionBankPage'
 import { isAuthenticated } from './utils/authTokens'
 
 function CatchAllRedirect() {
-  window.location.replace(isAuthenticated() ? '/' : '/auth')
+  window.location.replace(isAuthenticated() ? '/' : '/login')
   return null
 }
 
@@ -31,12 +32,16 @@ function LegacyRedirect({ to }) {
 }
 
 function App() {
+  const authed = isAuthenticated()
+
   return (
     <BrowserRouter>
       <Routes>
         <Route element={<GuestOnly />}>
-          <Route path="/auth" element={<AuthPage />} />
+          <Route path="/login" element={<AuthPage />} />
         </Route>
+
+        {!authed && <Route path="/" element={<Home />} />}
 
         <Route element={<RequireAuth />}>
           <Route
@@ -46,7 +51,7 @@ function App() {
               </CatalogProvider>
             }
           >
-            <Route path="/" element={<HomePage />} />
+            {authed && <Route path="/" element={<HomePage />} />}
 
             <Route path="/exams" element={<ExamsPage />} />
             <Route path="/exams/question-bank" element={<QuestionBankPage />} />
