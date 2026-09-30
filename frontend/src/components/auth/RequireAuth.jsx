@@ -1,13 +1,12 @@
-import { Outlet } from 'react-router-dom'
+import { Navigate, Outlet } from 'react-router-dom'
 
-import { isAuthenticated } from '../../utils/authTokens'
-import { redirectToAuth } from '../../utils/authRedirect'
+import { clearTokens, isAuthenticated } from '../../utils/authTokens'
 
 /** Blocks app routes when no access token is stored. */
 export default function RequireAuth() {
   if (!isAuthenticated()) {
-    redirectToAuth()
-    return null
+    clearTokens()
+    return <Navigate to="/login" replace />
   }
 
   return <Outlet />

@@ -1,3 +1,5 @@
+import { Link } from "react-router-dom";
+
 import "./Home.css";
 import "./PublicNavbar.css";
 
@@ -6,9 +8,9 @@ export default function Home() {
     <>
     <header className="sc-navbar">
       <div className="sc-nav-container">
-        <a href="/" className="sc-logo">
+        <Link to="/" className="sc-logo">
           SmartClass
-        </a>
+        </Link>
 
         <nav className="sc-nav-links" aria-label="Main navigation">
           <a href="#features">Features</a>
@@ -18,13 +20,13 @@ export default function Home() {
         </nav>
 
         <div className="sc-nav-actions">
-          <a href="/login" className="sc-login-link">
+          <Link to="/login" className="sc-login-link">
             Log in
-          </a>
+          </Link>
 
-          <a href="/login" className="sc-nav-cta">
+          <Link to="/login" className="sc-nav-cta">
             Get started
-          </a>
+          </Link>
         </div>
       </div>
     </header>
@@ -48,9 +50,9 @@ export default function Home() {
             </p>
 
             <div className="sc-actions">
-              <a href="/login" className="sc-btn sc-btn-primary">
+              <Link to="/login" className="sc-btn sc-btn-primary">
                 Get Started
-              </a>
+              </Link>
 
               <a href="#how-it-works" className="sc-btn sc-btn-secondary">
                 See How It Works
@@ -450,9 +452,9 @@ export default function Home() {
           </p>
 
           <div className="sc-actions">
-            <a href="/login" className="sc-btn sc-btn-primary">
+            <Link to="/login" className="sc-btn sc-btn-primary">
               Get Started
-            </a>
+            </Link>
           </div>
         </div>
       </section>

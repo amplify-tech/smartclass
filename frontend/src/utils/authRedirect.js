@@ -7,12 +7,6 @@ export function redirectToAuth() {
   }
 }
 
-export function redirectToHome() {
-  if (window.location.pathname !== '/') {
-    window.location.replace('/')
-  }
-}
-
 /**
  * Browser back/forward can restore pages from bfcache after logout,
  * which would otherwise show stale internal UI without remounting React.

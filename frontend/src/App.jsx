@@ -22,8 +22,7 @@ import QuestionBankPage from './pages/QuestionBankPage'
 import { isAuthenticated } from './utils/authTokens'
 
 function CatchAllRedirect() {
-  window.location.replace(isAuthenticated() ? '/' : '/login')
-  return null
+  return <Navigate to={isAuthenticated() ? '/' : '/login'} replace />
 }
 
 function LegacyRedirect({ to }) {

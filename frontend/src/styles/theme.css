@@ -23,6 +23,10 @@
   --sc-space-page: 1.5rem;
 }
 
+html {
+  overflow-y: scroll;
+}
+
 body {
   color: var(--sc-text);
   font-size: var(--sc-font-size-body);

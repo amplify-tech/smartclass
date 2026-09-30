@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 import LoginForm from '../components/auth/LoginForm'
 import RegisterForm from '../components/auth/RegisterForm'
 import {
@@ -17,19 +19,19 @@ export default function AuthPage() {
     <>
     <header className="sc-navbar">
       <div className="sc-nav-container">
-        <a href="/" className="sc-logo">
+        <Link to="/" className="sc-logo">
           SmartClass
-        </a>
+        </Link>
 
         <nav className="sc-nav-links" aria-label="Main navigation">
-          <a href="/#features">Features</a>
-          <a href="/#faq">FAQ</a>
+          <Link to="/#features">Features</Link>
+          <Link to="/#faq">FAQ</Link>
         </nav>
 
         <div className="sc-nav-actions">
-          <a href="/" className="sc-nav-cta">
+          <Link to="/" className="sc-nav-cta">
             About
-          </a>
+          </Link>
         </div>
       </div>
     </header>
