@@ -5,10 +5,23 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from rest_framework_simplejwt.views import TokenObtainPairView
 
-from user.serializers import ProfileSerializer, RegisterSerializer
+from user.serializers import (
+    LoginTokenObtainPairSerializer,
+    ProfileSerializer,
+    RegisterSerializer,
+)
 
 logger = logging.getLogger(__name__)
+
+
+class LoginView(TokenObtainPairView):
+    """Issue JWTs. Missing account and wrong password are field errors."""
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+    serializer_class = LoginTokenObtainPairSerializer
 
 
 class ProfileView(APIView):

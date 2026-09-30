@@ -11,7 +11,6 @@ const SIDEBAR_ITEMS = [
     children: [
       { to: '/exams', label: 'Exam List', end: true },
       { to: '/exams/question-bank', label: 'Question Bank' },
-      { to: '/exams/generate', label: 'Generate Questions' },
       { to: '/exams/pending-tasks', label: 'Pending Tasks' },
     ],
   },

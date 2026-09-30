@@ -1,8 +1,47 @@
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import update_last_login
 from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from rest_framework_simplejwt.settings import api_settings
 
 User = get_user_model()
+
+
+class LoginTokenObtainPairSerializer(TokenObtainPairSerializer):
+    """Email/password login with separate messages for missing account and bad password."""
+
+    default_error_messages = {
+        'no_account': 'No account found with this email.',
+        'bad_password': 'Wrong password.',
+        'inactive': 'This account is inactive.',
+    }
+
+    def validate(self, attrs):
+        email = (attrs.get(self.username_field) or '').strip()
+        password = attrs.get('password') or ''
+        user_model = get_user_model()
+
+        try:
+            user = user_model.objects.get(email__iexact=email)
+        except user_model.DoesNotExist:
+            raise serializers.ValidationError({'email': self.error_messages['no_account']})
+
+        if not user.check_password(password):
+            raise serializers.ValidationError({'password': self.error_messages['bad_password']})
+
+        if not user.is_active:
+            raise serializers.ValidationError({'email': self.error_messages['inactive']})
+
+        self.user = user
+        refresh = self.get_token(self.user)
+        data = {
+            'refresh': str(refresh),
+            'access': str(refresh.access_token),
+        }
+        if api_settings.UPDATE_LAST_LOGIN:
+            update_last_login(None, self.user)
+        return data
 
 
 class ProfileSerializer(serializers.ModelSerializer):
@@ -36,7 +75,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     def validate_email(self, value):
         email = value.strip().lower()
         if User.objects.filter(email__iexact=email).exists():
-            raise serializers.ValidationError('A user with this email already exists.')
+            raise serializers.ValidationError('Account already exists.')
         return email
 
     def validate_first_name(self, value):

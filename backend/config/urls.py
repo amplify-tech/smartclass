@@ -7,13 +7,14 @@ from drf_spectacular.views import (
     SpectacularRedocView,
     SpectacularSwaggerView,
 )
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView
 
 from config.views import HealthCheckView
+from user.views import LoginView
 
 api_v1_patterns = [
     path('health/', HealthCheckView.as_view(), name='health'),
-    path('auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('auth/token/', LoginView.as_view(), name='token_obtain_pair'),
     path('auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('', include('user.urls')),
     path('', include('document.urls')),
