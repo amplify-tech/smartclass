@@ -14,7 +14,7 @@ Usage::
 Sync code can wrap a coroutine with ``asyncio.run`` or
 ``asgiref.sync.async_to_sync``.
 """
-
+import os
 import json
 import logging
 import sys
@@ -118,13 +118,27 @@ class SlidesMCPClient:
             return parsed
         return text
 
+
     def _server(self):
         if self._url:
             return self._url
+
+        env = os.environ.copy()
+
+        for key in (
+            "GOOGLE_CLIENT_ID",
+            "GOOGLE_CLIENT_SECRET",
+            "GOOGLE_REFRESH_TOKEN",
+        ):
+            value = getattr(settings, key, None) or os.environ.get(key)
+            if value:
+                env[key] = value
+
         return StdioServerParameters(
             command=sys.executable,
             args=['-m', 'slides_mcp.server'],
             cwd=str(settings.BASE_DIR),
+            env=env,
         )
 
     def _session(self):
